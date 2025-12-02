@@ -48,16 +48,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         </div>
 
         {/* Content */}
-        <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-          <div className={`px-5 py-4 rounded-2xl shadow-xl backdrop-blur-sm ${
-            isUser 
-              ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-none border border-blue-500/30' 
-              : 'bg-slate-800/80 border border-slate-700 text-slate-200 rounded-tl-none'
-          }`}>
-            <div className="text-sm md:text-base leading-relaxed whitespace-pre-wrap font-light">
-              {renderFormattedText(message.text)}
+        <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} w-full`}>
+          
+          {/* Text Bubble - Only show if there is text */}
+          {message.text && (
+            <div className={`px-5 py-4 rounded-2xl shadow-xl backdrop-blur-sm ${
+              isUser 
+                ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-none border border-blue-500/30' 
+                : 'bg-slate-800/80 border border-slate-700 text-slate-200 rounded-tl-none'
+            }`}>
+              <div className="text-sm md:text-base leading-relaxed whitespace-pre-wrap font-light">
+                {renderFormattedText(message.text)}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Custom Content (Setup Guide, etc.) */}
+          {message.customContent && (
+             <div className="mt-2 w-full">
+                {message.customContent}
+             </div>
+          )}
 
           {/* Grounding Sources (Google Search Results) */}
           {!isUser && message.groundingChunks && message.groundingChunks.length > 0 && (

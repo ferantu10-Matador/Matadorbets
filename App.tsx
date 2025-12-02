@@ -7,6 +7,7 @@ import { HistoryModal } from './components/HistoryModal';
 import { INITIAL_MESSAGE } from './constants';
 import { MatadorLogo } from './components/MatadorLogo';
 import { TrendingUp, AlertTriangle, History, Share2 } from 'lucide-react';
+import { SetupGuide } from './components/SetupGuide';
 
 const App: React.FC = () => {
   const [chatState, setChatState] = useState<ChatState>({
@@ -24,6 +25,27 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Check for API Key on mount and show guide if missing
+  useEffect(() => {
+    // @ts-ignore
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+        setChatState((prev) => ({
+            ...prev,
+            messages: [
+                ...prev.messages,
+                {
+                    id: 'setup-guide',
+                    role: 'model',
+                    text: '',
+                    timestamp: new Date(),
+                    customContent: <SetupGuide />
+                }
+            ]
+        }));
+    }
+  }, []);
 
   // Load history from local storage on mount
   useEffect(() => {
@@ -117,9 +139,11 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error(error);
       let errorText = "**Error Crítico:** Lo siento, no he podido conectar con la central de datos.";
+      let customContent = undefined;
       
       if (error.message && error.message.includes("API_KEY")) {
-         errorText = "**Error de Configuración:** Falta la API Key. Por favor, verifica la configuración en Vercel.";
+         errorText = "";
+         customContent = <SetupGuide />;
       }
 
       const errorMessage: Message = {
@@ -128,6 +152,7 @@ const App: React.FC = () => {
         text: errorText,
         timestamp: new Date(),
         isError: true,
+        customContent: customContent
       };
 
       setChatState((prev) => ({
