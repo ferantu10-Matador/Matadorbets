@@ -1,0 +1,5 @@
+{
+  "name": "Tipster AI - Live Analyst",
+  "description": "Professional sports betting analyst powered by Gemini with real-time Google Search integration for match analysis, stats, and predictions.",
+  "requestFramePermissions": []
+}
