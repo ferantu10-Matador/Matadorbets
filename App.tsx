@@ -52,13 +52,10 @@ const App: React.FC = () => {
 
   // Helper to extract useful metadata from the raw text for the history summary
   const extractMatchDetails = (text: string): { title: string; summary: string } => {
-    // Attempt to find the match title (usually starts with soccer ball icon based on system prompt)
     const titleMatch = text.match(/INFORME MATADOR:\s*(.*?)(\n|$)/i) || text.match(/⚽\s*(.*?)(\n|$)/);
     let title = titleMatch ? titleMatch[1].trim() : "Análisis Matador";
-    // Remove markdown bolding from title if present
     title = title.replace(/\*\*/g, '');
 
-    // Attempt to find the "Value" or "Safe" bet for the summary
     const valueMatch = text.match(/⚖️\s*\*\*?VALOR\*\*?.*?:?\s*\n?\s*\*\s*\*\*Selección:\*\*\s*(.*?)(?:\n|$)/i) || text.match(/⚖️\s*\*\*?VALOR\*\*?.*?:(.*?)(?:\n|$)/i);
     const safeMatch = text.match(/🛡️\s*\*\*?SEGURA\*\*?.*?:?\s*\n?\s*\*\s*\*\*Selección:\*\*\s*(.*?)(?:\n|$)/i) || text.match(/🛡️\s*\*\*?SEGURA\*\*?.*?:(.*?)(?:\n|$)/i);
     
@@ -69,14 +66,12 @@ const App: React.FC = () => {
       summary = `🛡️ Segura: ${safeMatch[1].trim()}`;
     }
 
-    // Clean up summary length
     if (summary.length > 50) summary = summary.substring(0, 47) + "...";
 
     return { title, summary };
   };
 
   const handleSendMessage = async (text: string) => {
-    // Add User Message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -107,7 +102,6 @@ const App: React.FC = () => {
         isLoading: false,
       }));
 
-      // Add to History
       const { title, summary } = extractMatchDetails(response.text);
       const newHistoryItem: HistoryItem = {
         id: botMessage.id,
@@ -120,12 +114,18 @@ const App: React.FC = () => {
 
       setHistory((prev) => [newHistoryItem, ...prev]);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      let errorText = "**Error Crítico:** Lo siento, no he podido conectar con la central de datos.";
+      
+      if (error.message && error.message.includes("API_KEY")) {
+         errorText = "**Error de Configuración:** Falta la API Key. Por favor, verifica la configuración en Vercel.";
+      }
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: "**Error:** Lo siento, el sistema está saturado. Por favor, intenta de nuevo.",
+        text: errorText,
         timestamp: new Date(),
         isError: true,
       };
@@ -158,7 +158,6 @@ const App: React.FC = () => {
         console.log('Error sharing:', err);
       }
     } else {
-      // Fallback for desktop or unsupported browsers
       navigator.clipboard.writeText(window.location.href);
       alert('Enlace copiado al portapapeles. ¡Pásalo a tus amigos!');
     }

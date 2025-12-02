@@ -4,21 +4,31 @@ import { SYSTEM_INSTRUCTION } from "../constants";
 let chatSession: Chat | null = null;
 
 const getAiClient = () => {
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY is missing from environment variables");
+  // @ts-ignore process is a node global
+  const apiKey = process.env.API_KEY;
+  
+  // Check if API key is present
+  if (!apiKey) {
+    console.warn("API_KEY not found in environment variables.");
+    throw new Error("API_KEY_MISSING");
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey });
 };
 
 export const initializeChat = () => {
-  const ai = getAiClient();
-  chatSession = ai.chats.create({
-    model: 'gemini-2.5-flash',
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      tools: [{ googleSearch: {} }],
-    },
-  });
+  try {
+    const ai = getAiClient();
+    chatSession = ai.chats.create({
+      model: 'gemini-2.5-flash',
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        tools: [{ googleSearch: {} }],
+      },
+    });
+  } catch (error) {
+    console.error("Failed to initialize chat session:", error);
+    // We don't throw here to allow the UI to handle the error gracefully when sending a message
+  }
 };
 
 export const sendMessageToGemini = async (message: string): Promise<{ text: string; groundingChunks: any[] }> => {
@@ -27,7 +37,10 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
   }
 
   try {
-    if (!chatSession) throw new Error("Chat session failed to initialize");
+    if (!chatSession) {
+        // Double check after init attempt
+        throw new Error("API_KEY_MISSING");
+    }
 
     const result = await chatSession.sendMessage({ message });
     
@@ -40,8 +53,11 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
     const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
     return { text, groundingChunks };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
+    if (error.message === "API_KEY_MISSING") {
+        throw new Error("API_KEY_MISSING");
+    }
     throw error;
   }
 };
