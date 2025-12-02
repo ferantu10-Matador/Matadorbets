@@ -1,3 +1,5 @@
+import { ReactNode } from 'react';
+
 export interface GroundingChunk {
   web?: {
     uri: string;
@@ -12,6 +14,7 @@ export interface Message {
   timestamp: Date;
   isError?: boolean;
   groundingChunks?: GroundingChunk[];
+  customContent?: ReactNode;
 }
 
 export interface ChatState {
