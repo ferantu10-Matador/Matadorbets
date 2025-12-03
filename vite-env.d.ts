@@ -1,6 +1,2 @@
-declare namespace NodeJS {
-  interface ProcessEnv {
-    API_KEY?: string;
-    [key: string]: any;
-  }
-}
+// /// <reference types="vite/client" />
+// No declaramos 'process' aquí para evitar conflictos con @types/node

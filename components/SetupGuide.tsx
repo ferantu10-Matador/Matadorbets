@@ -16,7 +16,7 @@ export const SetupGuide: React.FC = () => {
       
       <div className="p-5 space-y-4">
         <p className="text-slate-300 text-sm leading-relaxed">
-          Para que Matadorbets funcione, necesitas una clave gratuita de Google. Es un proceso de 1 minuto:
+          Para que Matadorbets funcione, necesitas una clave gratuita de Google.
         </p>
 
         <ol className="space-y-3">
@@ -39,7 +39,7 @@ export const SetupGuide: React.FC = () => {
             <span className="bg-slate-700 text-slate-300 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 border border-slate-600">2</span>
             <div className="text-sm text-slate-400">
               <span className="text-slate-200 font-semibold block mb-1">Añádela en Vercel</span>
-              Ve a <span className="text-slate-200 font-semibold">Settings</span> → <span className="text-slate-200 font-semibold">Environment Variables</span>
+              Ve a <span className="text-slate-200 font-semibold">Settings</span> luego a <span className="text-slate-200 font-semibold">Environment Variables</span>.
             </div>
           </li>
 

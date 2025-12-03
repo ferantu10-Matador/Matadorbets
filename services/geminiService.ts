@@ -23,6 +23,13 @@ export const initializeChat = () => {
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ googleSearch: {} }],
+        // Disable safety settings to prevent blocking gambling/betting content
+        safetySettings: [
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' }
+        ]
       },
     });
   } catch (error) {
@@ -42,7 +49,15 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
         throw new Error("API_KEY_MISSING");
     }
 
-    const result = await chatSession.sendMessage({ message });
+    // INJECT REAL-TIME CONTEXT
+    // This fixes the "future date" hallucination by telling the AI exactly what 'today' is.
+    const now = new Date();
+    const dateString = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeString = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    
+    const contextMessage = `[SISTEMA: Fecha y Hora Real del Usuario: ${dateString}, ${timeString}. Usa ESTA fecha como referencia absoluta para "hoy", "mañana" o búsquedas en Google.]\n\n${message}`;
+
+    const result = await chatSession.sendMessage({ message: contextMessage });
     
     // Extract text
     const text = result.text || "No se pudo generar un análisis.";

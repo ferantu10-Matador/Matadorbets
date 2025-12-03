@@ -74,21 +74,32 @@ const App: React.FC = () => {
 
   // Helper to extract useful metadata from the raw text for the history summary
   const extractMatchDetails = (text: string): { title: string; summary: string } => {
-    const titleMatch = text.match(/INFORME MATADOR:\s*(.*?)(\n|$)/i) || text.match(/⚽\s*(.*?)(\n|$)/);
-    let title = titleMatch ? titleMatch[1].trim() : "Análisis Matador";
-    title = title.replace(/\*\*/g, '');
-
-    const valueMatch = text.match(/⚖️\s*\*\*?VALOR\*\*?.*?:?\s*\n?\s*\*\s*\*\*Selección:\*\*\s*(.*?)(?:\n|$)/i) || text.match(/⚖️\s*\*\*?VALOR\*\*?.*?:(.*?)(?:\n|$)/i);
-    const safeMatch = text.match(/🛡️\s*\*\*?SEGURA\*\*?.*?:?\s*\n?\s*\*\s*\*\*Selección:\*\*\s*(.*?)(?:\n|$)/i) || text.match(/🛡️\s*\*\*?SEGURA\*\*?.*?:(.*?)(?:\n|$)/i);
+    // 1. Extract Title: Look for "# 🐂 TeamA vs TeamB"
+    const titleMatch = text.match(/# 🐂\s*(.*?)(\n|$)/i) || 
+                       text.match(/#\s*🐂\s*(.*?)(\n|$)/i);
     
+    let title = titleMatch ? titleMatch[1].trim() : "Análisis Matador";
+    title = title.replace(/\*\*/g, ''); // Remove bold markdown if present
+
+    // 2. Extract Summary: Try to parse the new Markdown Table for the "Ganador" row
+    // Pattern: | 🏆 Ganador | Prediction | Confidence |
+    const tableWinnerMatch = text.match(/\|\s*🏆\s*Ganador\s*\|\s*(.*?)\s*\|/i);
+    
+    // Fallback: Try to find "La Joya"
+    const joyaMatch = text.match(/### 💎 La Joya.*?\n> \*\*(.*?)\*\*/i) ||
+                      text.match(/### 💎 La Joya.*?\n>\s*(.*?)\n/i);
+
     let summary = "Ver ficha técnica";
-    if (valueMatch) {
-      summary = `💎 Valor: ${valueMatch[1].trim()}`;
-    } else if (safeMatch) {
-      summary = `🛡️ Segura: ${safeMatch[1].trim()}`;
+    
+    if (joyaMatch && joyaMatch[1].trim()) {
+      summary = `💎 ${joyaMatch[1].trim()}`;
+    } else if (tableWinnerMatch && tableWinnerMatch[1].trim()) {
+      summary = `🏆 ${tableWinnerMatch[1].trim()}`;
     }
 
-    if (summary.length > 50) summary = summary.substring(0, 47) + "...";
+    // Clean up summary
+    summary = summary.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
+    if (summary.length > 60) summary = summary.substring(0, 57) + "...";
 
     return { title, summary };
   };
@@ -125,16 +136,19 @@ const App: React.FC = () => {
       }));
 
       const { title, summary } = extractMatchDetails(response.text);
-      const newHistoryItem: HistoryItem = {
-        id: botMessage.id,
-        timestamp: Date.now(),
-        matchTitle: title,
-        summary: summary,
-        fullContent: response.text,
-        groundingChunks: response.groundingChunks
-      };
-
-      setHistory((prev) => [newHistoryItem, ...prev]);
+      
+      // Only add to history if we successfully extracted a title (avoids saving error messages or chitchat)
+      if (title !== "Análisis Matador" || summary !== "Ver ficha técnica") {
+        const newHistoryItem: HistoryItem = {
+            id: botMessage.id,
+            timestamp: Date.now(),
+            matchTitle: title,
+            summary: summary,
+            fullContent: response.text,
+            groundingChunks: response.groundingChunks
+        };
+        setHistory((prev) => [newHistoryItem, ...prev]);
+      }
 
     } catch (error: any) {
       console.error(error);
