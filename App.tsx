@@ -10,6 +10,7 @@ import { SetupGuide } from './components/SetupGuide';
 import { Sidebar } from './components/Sidebar';
 import { MatchesView } from './components/MatchesView';
 import { StatsView } from './components/StatsView';
+import { SettingsView } from './components/SettingsView';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('matches'); // Defaulting to matches for new flow
@@ -220,6 +221,11 @@ const App: React.FC = () => {
             {/* View: Stats */}
             {currentView === 'stats' && (
                 <StatsView />
+            )}
+
+            {/* View: Settings */}
+            {currentView === 'settings' && (
+                <SettingsView />
             )}
         </div>
       </main>

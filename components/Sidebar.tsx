@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, CalendarDays, BarChart2, X, ChevronRight } from 'lucide-react';
+import { MessageSquare, CalendarDays, BarChart2, X, ChevronRight, Settings } from 'lucide-react';
 import { ViewType } from '../types';
 import { MatadorLogo } from './MatadorLogo';
 
@@ -103,11 +103,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentView, 
           })}
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-slate-800 text-center">
-            <p className="text-xs text-slate-600">
-                v2.0.0 &bull; Matador AI
-            </p>
+        {/* Footer / Settings */}
+        <div className="p-4 border-t border-slate-800">
+           <button
+                onClick={() => handleNavigation('settings')}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border border-transparent ${
+                   currentView === 'settings' 
+                   ? 'bg-slate-900 text-white border-slate-700' 
+                   : 'text-slate-400 hover:bg-slate-900 hover:text-white'
+                }`}
+            >
+               <Settings size={18} />
+               <div className="text-left flex-1">
+                   <span className="block text-sm font-semibold">Ajustes / Datos</span>
+                   <span className="text-[10px] text-slate-500">Backup & Restore</span>
+               </div>
+            </button>
         </div>
       </div>
     </>

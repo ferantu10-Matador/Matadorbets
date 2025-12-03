@@ -9,7 +9,7 @@ interface MatchesViewProps {
     // Empty props as logic is internal now
 }
 
-const CACHE_KEY = 'matador_matches_cache';
+const CACHE_KEY = 'matador_matches_cache_v2';
 
 export const MatchesView: React.FC<MatchesViewProps> = () => {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -122,6 +122,21 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
       }
   };
 
+  // Helper to format time to user's local time
+  const formatLocalTime = (utcString?: string, fallbackTime?: string) => {
+    if (!utcString) return fallbackTime || '--:--';
+    try {
+        const date = new Date(utcString);
+        return date.toLocaleTimeString(undefined, { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+        });
+    } catch (e) {
+        return fallbackTime || '--:--';
+    }
+  };
+
   if (isLoadingList) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-fade-in">
@@ -197,7 +212,8 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
                     </span>
                     <div className="flex items-center gap-1 text-slate-300 text-xs font-mono bg-slate-800/50 px-2 py-1 rounded shrink-0">
                         <Clock size={12} />
-                        {match.time}
+                        {/* Safe Local Time Formatting */}
+                        {formatLocalTime(match.utc_timestamp, match.time)}
                     </div>
                 </div>
 
@@ -261,7 +277,7 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
       </div>
       
       <p className="text-center text-[10px] text-slate-600 mt-6 pb-4">
-        Datos obtenidos por IA. Verifica horarios locales.
+        Datos obtenidos por IA. Horarios convertidos a tu zona local.
       </p>
 
       {/* Detail Modal */}

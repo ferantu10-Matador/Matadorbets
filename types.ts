@@ -34,7 +34,8 @@ export interface HistoryItem {
 export interface Match {
   home: string;
   away: string;
-  time: string;
+  time?: string; // Legacy fallback
+  utc_timestamp?: string; // New strict time field
   league: string;
   fact: string;
   analysis?: string; // Stores the AI analysis locally
@@ -50,4 +51,4 @@ export interface Bet {
   result: 'pending' | 'won' | 'lost';
 }
 
-export type ViewType = 'chat' | 'matches' | 'stats';
+export type ViewType = 'chat' | 'matches' | 'stats' | 'settings';

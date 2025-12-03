@@ -84,21 +84,33 @@ export const fetchTopMatches = async (): Promise<Match[]> => {
         const now = new Date();
         const dateString = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
-        // Robust prompt asking for JSON specifically
-        // Note: We cannot use responseMimeType: 'application/json' when using googleSearch tool as they are incompatible in this model version.
+        // Robust prompt asking for JSON specifically with strict ISO 8601 Timestamp
         const prompt = `Fecha actual: ${dateString}.
-        Busca en Google "Partidos de fútbol hoy destacados Europa Latam".
-        Identifica los 6-10 partidos más importantes que se juegan HOY.
+        Busca en Google "Partidos de fútbol hoy calendario completo resultados".
+        
+        Tu misión es listar TODOS los partidos oficiales que se juegan HOY en las siguientes competiciones prioritarias:
+        1. 🇪🇸 España: La Liga, Copa del Rey.
+        2. 🏴󠁧󠁢󠁥󠁮󠁧󠁿 Inglaterra: Premier League, FA Cup, EFL Cup.
+        3. 🇮🇹 Italia: Serie A, Coppa Italia.
+        4. 🇩🇪 Alemania: Bundesliga, DFB Pokal.
+        5. 🇫🇷 Francia: Ligue 1, Coupe de France.
+        6. 🇪🇺 Europa: Champions League, Europa League, Conference League.
+        7. 🌎 Latam: Copa Libertadores, Sudamericana, Liga Argentina, Liga MX, Brasileirao.
+        
+        Si hoy hay partidos de estas ligas, INCLÚYELOS TODOS (hasta un máximo de 25).
+        Si hay pocos partidos "Top", rellena con ligas secundarias europeas (Holanda, Portugal, Turquía).
         
         Responde ÚNICAMENTE con un array JSON válido. 
         NO añadas bloques markdown (\`\`\`json), NI texto introductorio. Solo el array crudo.
+        
+        IMPORTANTE: Para la hora, usa el campo "utc_timestamp" en formato ISO 8601 estricto (Ej: 2023-10-27T19:00:00Z). Asegúrate de que sean horas UTC reales.
         
         Formato requerido:
         [
           {
             "home": "Equipo Local",
             "away": "Equipo Visitante",
-            "time": "HH:MM",
+            "utc_timestamp": "ISO_8601_STRING_UTC", 
             "league": "Competición",
             "fact": "Dato breve (ej: 'El local lleva 5 victorias seguidas')"
           }
