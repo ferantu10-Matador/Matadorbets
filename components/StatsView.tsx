@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Bet } from '../types';
-import { Plus, Activity, DollarSign, Settings, Edit2 } from 'lucide-react';
+import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon } from 'lucide-react';
 import { AddBetModal } from './AddBetModal';
 import { EditBankrollModal } from './EditBankrollModal';
 import {
@@ -11,15 +11,23 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from 'recharts';
 
 const STORAGE_KEY_BETS = 'matador_bets_history';
 const STORAGE_KEY_CONFIG = 'matador_bankroll_config';
 
+// Colors for Pie Chart
+const COLORS = ['#10b981', '#f43f5e', '#64748b']; // Green, Red, Gray
+
 export const StatsView: React.FC = () => {
   const [bets, setBets] = useState<Bet[]>([]);
   const [initialBankroll, setInitialBankroll] = useState(1000);
+  const [isLoaded, setIsLoaded] = useState(false);
   
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
   const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
@@ -48,12 +56,15 @@ export const StatsView: React.FC = () => {
             console.error("Error parsing config", e);
         }
     }
+    setIsLoaded(true);
   }, []);
 
   // Save Data
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_BETS, JSON.stringify(bets));
-  }, [bets]);
+    if (isLoaded) {
+        localStorage.setItem(STORAGE_KEY_BETS, JSON.stringify(bets));
+    }
+  }, [bets, isLoaded]);
 
   const handleSaveBankroll = (newAmount: number) => {
       setInitialBankroll(newAmount);
@@ -101,19 +112,19 @@ export const StatsView: React.FC = () => {
     });
 
     const roi = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0;
+    const yieldVal = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0; // Same as ROI in simple terms but conceptually different in some contexts, keeping standard formula
 
     return {
       currentBankroll,
       netProfit,
-      roi
+      roi,
+      yieldVal
     };
   }, [bets, initialBankroll]);
 
-  // Prepare Chart Data
-  const chartData = useMemo(() => {
-    // Sort bets chronologically oldest first for the graph
+  // Area Chart Data (Bankroll Evolution)
+  const areaChartData = useMemo(() => {
     const sortedBets = [...bets].filter(b => b.result !== 'pending').sort((a, b) => a.date - b.date);
-    
     let runningBankroll = initialBankroll;
     const data = [{ date: 'Inicio', value: initialBankroll }];
 
@@ -128,9 +139,22 @@ export const StatsView: React.FC = () => {
         value: Number(runningBankroll.toFixed(2))
       });
     });
-
     return data;
   }, [bets, initialBankroll]);
+
+  // Pie Chart Data (Win Rate Distribution)
+  const pieChartData = useMemo(() => {
+      const won = bets.filter(b => b.result === 'won').length;
+      const lost = bets.filter(b => b.result === 'lost').length;
+      const pending = bets.filter(b => b.result === 'pending').length;
+      return [
+          { name: 'Ganadas', value: won },
+          { name: 'Perdidas', value: lost },
+          { name: 'Pendientes', value: pending },
+      ];
+  }, [bets]);
+
+  if (!isLoaded) return null;
 
   return (
     <div className="p-4 pb-24 space-y-6 animate-slide-up">
@@ -152,13 +176,13 @@ export const StatsView: React.FC = () => {
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Bankroll */}
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 bg-emerald-500/10 w-16 h-16 rounded-full group-hover:bg-emerald-500/20 transition-colors"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Bankroll</p>
-            <p className={`text-lg md:text-xl font-bold font-mono ${stats.currentBankroll >= initialBankroll ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <p className={`text-lg font-bold font-mono ${stats.currentBankroll >= initialBankroll ? 'text-emerald-400' : 'text-rose-400'}`}>
                {stats.currentBankroll.toFixed(0)}€
             </p>
         </div>
@@ -167,7 +191,7 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
              <div className="absolute -right-4 -top-4 bg-blue-500/10 w-16 h-16 rounded-full"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Neto</p>
-            <p className={`text-lg md:text-xl font-bold font-mono ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <p className={`text-lg font-bold font-mono ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                {stats.netProfit > 0 ? '+' : ''}{stats.netProfit.toFixed(0)}€
             </p>
         </div>
@@ -176,60 +200,105 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
             <div className="absolute -right-4 -top-4 bg-purple-500/10 w-16 h-16 rounded-full"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">ROI</p>
-            <p className={`text-lg md:text-xl font-bold font-mono ${stats.roi >= 0 ? 'text-purple-400' : 'text-rose-400'}`}>
+            <p className={`text-lg font-bold font-mono ${stats.roi >= 0 ? 'text-purple-400' : 'text-rose-400'}`}>
                {stats.roi.toFixed(1)}%
+            </p>
+        </div>
+
+        {/* YIELD */}
+        <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 bg-orange-500/10 w-16 h-16 rounded-full"></div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">YIELD</p>
+            <p className={`text-lg font-bold font-mono ${stats.yieldVal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+               {stats.yieldVal > 0 ? '+' : ''}{stats.yieldVal.toFixed(2)}%
             </p>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[250px] w-full">
-         <h3 className="text-xs font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <Activity size={14} /> RENDIMIENTO
-         </h3>
-         <ResponsiveContainer width="100%" height="85%">
-            <AreaChart data={chartData}>
-               <defs>
-                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                     <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-               </defs>
-               <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
-               <XAxis 
-                  dataKey="date" 
-                  tick={{fill: '#64748b', fontSize: 10}} 
-                  axisLine={false} 
-                  tickLine={false}
-                  minTickGap={30}
-               />
-               <YAxis 
-                  domain={['auto', 'auto']} 
-                  tick={{fill: '#64748b', fontSize: 10}} 
-                  axisLine={false} 
-                  tickLine={false}
-                  width={35}
-               />
-               <Tooltip 
-                  contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
-                  itemStyle={{ color: '#10b981' }}
-                  labelStyle={{ display: 'none' }}
-                  formatter={(value: any) => [`${value}€`, 'Bankroll']}
-               />
-               <ReferenceLine y={initialBankroll} stroke="#ef4444" strokeDasharray="3 3" opacity={0.5} />
-               <Area 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#10b981" 
-                  strokeWidth={2}
-                  fillOpacity={1} 
-                  fill="url(#colorValue)" 
-               />
-            </AreaChart>
-         </ResponsiveContainer>
+      {/* Charts Section */}
+      <div className="grid md:grid-cols-3 gap-4">
+          {/* Line Chart */}
+          <div className="md:col-span-2 bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[280px]">
+             <h3 className="text-xs font-bold text-slate-500 mb-4 flex items-center gap-2">
+                <Activity size={14} /> EVOLUCIÓN BANKROLL
+             </h3>
+             <ResponsiveContainer width="100%" height="85%">
+                <AreaChart data={areaChartData}>
+                   <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                         <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                   </defs>
+                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
+                   <XAxis 
+                      dataKey="date" 
+                      tick={{fill: '#64748b', fontSize: 10}} 
+                      axisLine={false} 
+                      tickLine={false}
+                      minTickGap={30}
+                   />
+                   <YAxis 
+                      domain={['auto', 'auto']} 
+                      tick={{fill: '#64748b', fontSize: 10}} 
+                      axisLine={false} 
+                      tickLine={false}
+                      width={35}
+                   />
+                   <Tooltip 
+                      contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                      itemStyle={{ color: '#10b981' }}
+                      labelStyle={{ display: 'none' }}
+                      formatter={(value: any) => [`${value}€`, 'Bankroll']}
+                   />
+                   <ReferenceLine y={initialBankroll} stroke="#ef4444" strokeDasharray="3 3" opacity={0.5} />
+                   <Area 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#10b981" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorValue)" 
+                   />
+                </AreaChart>
+             </ResponsiveContainer>
+          </div>
+
+          {/* Pie Chart */}
+          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[280px]">
+             <h3 className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-2">
+                <PieChartIcon size={14} /> DISTRIBUCIÓN
+             </h3>
+             <ResponsiveContainer width="100%" height="90%">
+                <PieChart>
+                    <Pie
+                        data={pieChartData}
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                    >
+                        {pieChartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                        ))}
+                    </Pie>
+                    <Tooltip 
+                         contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                         itemStyle={{ color: '#fff' }}
+                    />
+                    <Legend 
+                        verticalAlign="bottom" 
+                        height={36} 
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }}
+                    />
+                </PieChart>
+             </ResponsiveContainer>
+          </div>
       </div>
 
-      {/* Bets History */}
+      {/* Bets History List */}
       <div>
          <div className="flex justify-between items-center mb-4">
              <h3 className="font-bold text-white text-sm">Últimas Apuestas</h3>
@@ -244,35 +313,53 @@ export const StatsView: React.FC = () => {
                  </div>
              ) : (
                  bets.map((bet) => (
-                     <div key={bet.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex justify-between items-center shadow-sm hover:border-slate-700 transition-colors">
-                         <div className="flex-1 min-w-0 pr-4">
-                             <p className="text-white font-medium text-sm truncate">{bet.event}</p>
-                             <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                                 <span className="font-mono text-slate-400">{new Date(bet.date).toLocaleDateString()}</span>
-                                 <span>Stake: <span className="text-slate-300">{bet.stake}€</span></span>
-                                 <span>@ <span className="text-slate-300">{bet.odds}</span></span>
+                     <div key={bet.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex justify-between items-center shadow-sm hover:border-slate-700 transition-colors group">
+                         <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                             {/* Status Dot */}
+                             <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                 bet.result === 'won' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                                 bet.result === 'lost' ? 'bg-rose-500' :
+                                 'bg-slate-600'
+                             }`} />
+                             
+                             <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                     {bet.sport && (
+                                         <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                                             {bet.sport === 'football' ? 'FUT' : bet.sport === 'basketball' ? 'BAL' : bet.sport === 'tennis' ? 'TEN' : bet.sport === 'esports' ? 'ESP' : 'GEN'}
+                                         </span>
+                                     )}
+                                     <p className="text-white font-medium text-sm truncate">{bet.event}</p>
+                                </div>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                                     <span className="font-mono text-slate-400">{new Date(bet.date).toLocaleDateString()}</span>
+                                     <span>Stake: <span className="text-slate-300">{bet.stake}€</span></span>
+                                     <span>@ <span className="text-slate-300">{bet.odds}</span></span>
+                                </div>
                              </div>
                          </div>
                          
-                         <div className="flex flex-col items-end gap-1">
+                         <div className="flex items-center gap-2">
                              <select 
                                 value={bet.result}
                                 onChange={(e) => handleStatusChange(bet.id, e.target.value as any)}
-                                className={`text-[10px] font-bold uppercase px-2 py-1 rounded cursor-pointer outline-none border border-transparent hover:border-slate-600 transition-colors ${
-                                    bet.result === 'won' ? 'bg-emerald-950/30 text-emerald-400' :
-                                    bet.result === 'lost' ? 'bg-rose-950/30 text-rose-400' :
-                                    'bg-slate-800 text-slate-400'
+                                className={`text-[10px] font-bold uppercase px-2 py-1.5 rounded cursor-pointer outline-none border border-transparent transition-colors appearance-none text-center min-w-[70px] ${
+                                    bet.result === 'won' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                                    bet.result === 'lost' ? 'bg-rose-950/30 text-rose-400 border-rose-900/50' :
+                                    'bg-slate-800 text-slate-400 border-slate-700'
                                 }`}
                              >
-                                 <option value="pending">Pendiente</option>
-                                 <option value="won">Ganada</option>
-                                 <option value="lost">Perdida</option>
+                                 <option value="pending">⏳ Pend.</option>
+                                 <option value="won">✅ Ganada</option>
+                                 <option value="lost">❌ Perdida</option>
                              </select>
+                             
                              <button 
                                 onClick={() => handleDeleteBet(bet.id)}
-                                className="text-[10px] text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-950/30 rounded-lg transition-all"
+                                title="Eliminar apuesta"
                              >
-                                Eliminar
+                                <Trash2 size={16} />
                              </button>
                          </div>
                      </div>

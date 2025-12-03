@@ -10,6 +10,7 @@ interface AddBetModalProps {
 
 export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSave }) => {
   const [event, setEvent] = useState('');
+  const [sport, setSport] = useState('football');
   const [stake, setStake] = useState('');
   const [odds, setOdds] = useState('');
   const [result, setResult] = useState<'pending' | 'won' | 'lost'>('pending');
@@ -22,6 +23,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
 
     onSave({
       event,
+      sport,
       stake: parseFloat(stake),
       odds: parseFloat(odds),
       result
@@ -31,6 +33,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
     setEvent('');
     setStake('');
     setOdds('');
+    setSport('football');
     setResult('pending');
     onClose();
   };
@@ -46,6 +49,23 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          
+          {/* Sport Selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Deporte</label>
+            <select
+               value={sport}
+               onChange={(e) => setSport(e.target.value)}
+               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-rose-500 transition-colors appearance-none"
+            >
+                <option value="football">⚽ Fútbol</option>
+                <option value="basketball">🏀 Baloncesto</option>
+                <option value="tennis">🎾 Tenis</option>
+                <option value="esports">🎮 eSports</option>
+                <option value="other">🎲 Otro</option>
+            </select>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Evento / Partido</label>
             <input

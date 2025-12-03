@@ -46,6 +46,7 @@ export interface Bet {
   id: string;
   date: number; // Timestamp
   event: string;
+  sport?: string; // New field for sport filtering
   stake: number;
   odds: number;
   result: 'pending' | 'won' | 'lost';
