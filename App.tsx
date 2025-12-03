@@ -140,7 +140,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden relative selection:bg-rose-500 selection:text-white">
+    <div className="flex flex-col h-[100dvh] w-screen bg-slate-950 text-slate-100 overflow-hidden relative selection:bg-rose-500 selection:text-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       {/* Sidebar Navigation */}
       <Sidebar 
         isOpen={isSidebarOpen} 

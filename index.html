@@ -19,12 +19,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+      }
       body {
         font-family: 'Inter', sans-serif;
         background-color: #020617; /* slate-950 */
         color: #e2e8f0; /* slate-200 */
+        /* Native App Feel Fixes */
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
         overscroll-behavior-y: none; /* Prevents pull-to-refresh on mobile */
         -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
       }
       /* Custom scrollbar for dark theme */
       ::-webkit-scrollbar {
@@ -68,27 +77,31 @@
       }
     </style>
 <link rel="stylesheet" href="/index.css">
+<script>
+  window.process = { env: {} };
+  window.global = window;
+</script>
 <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
-    "vite": "https://aistudiocdn.com/vite@^7.2.6",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
     "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.86.0",
     "remark-gfm": "https://aistudiocdn.com/remark-gfm@^4.0.1",
     "canvas-confetti": "https://aistudiocdn.com/canvas-confetti@^1.9.4",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.86.0"
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0"
   }
 }
 </script>
 </head>
   <body>
-    <div id="root" class="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center text-slate-500">
+    <div id="root" class="h-full w-full bg-slate-950 flex flex-col items-center justify-center text-slate-500">
        <!-- Loading State directly in HTML to prevent white flash -->
        <div class="animate-pulse flex flex-col items-center">
           <div class="w-12 h-12 rounded-full border-2 border-rose-600 border-t-transparent animate-spin mb-4"></div>
