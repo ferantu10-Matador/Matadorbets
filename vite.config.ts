@@ -9,9 +9,19 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Polyfill process.env.API_KEY so it works in the browser build
-      // Default to empty string if undefined to prevent "ReferenceError" or undefined issues
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
+      // Polyfill process.env so it works in the browser build
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
+      
+      // Supabase Keys
+      'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL || ''),
+      'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''),
+      
+      // Support VITE_ prefix as well just in case
+      'process.env.VITE_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL || ''),
+      'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''),
+      
+      // Prevent "process is not defined" errors in some libs
+      'process.env': {}
     },
     build: {
       outDir: 'dist',

@@ -1,6 +1,7 @@
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 import { Match } from "../types";
+import { supabase } from "./supabaseClient";
 
 let chatSession: Chat | null = null;
 
@@ -35,7 +36,6 @@ export const initializeChat = () => {
     });
   } catch (error) {
     console.error("Failed to initialize chat session:", error);
-    // We don't throw here to allow the UI to handle the error gracefully when sending a message
   }
 };
 
@@ -46,12 +46,9 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
 
   try {
     if (!chatSession) {
-        // Double check after init attempt
         throw new Error("API_KEY_MISSING");
     }
 
-    // INJECT REAL-TIME CONTEXT
-    // This fixes the "future date" hallucination by telling the AI exactly what 'today' is.
     const now = new Date();
     const dateString = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeString = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -60,12 +57,8 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
 
     const result = await chatSession.sendMessage({ message: contextMessage });
     
-    // Extract text
     const text = result.text || "No se pudo generar un análisis.";
-
-    // Extract grounding chunks (sources)
-    // The structure can vary, safely accessing it
-    // @ts-ignore - The SDK types for grounding metadata can be nested differently in runtime responses
+    // @ts-ignore
     const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
 
     return { text, groundingChunks };
@@ -78,13 +71,129 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
   }
 };
 
+// --- SMART CACHING LOGIC ---
+
+// Helper: Normalize ID (slug)
+const generateMatchId = (home: string, away: string, date: string): string => {
+    // Clean string: lowercase, remove accents, remove special chars, spaces to dashes
+    const clean = (str: string) => str.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+        .replace(/[^a-z0-9]/g, "-") // Non-alphanumeric to dash
+        .replace(/-+/g, "-") // Remove double dashes
+        .replace(/^-|-$/g, ""); // Trim dashes
+    
+    // Use the date part only (YYYY-MM-DD)
+    const datePart = new Date(date).toISOString().split('T')[0];
+    
+    return `${clean(home)}-vs-${clean(away)}-${datePart}`;
+};
+
+export const analyzeMatch = async (home: string, away: string, league: string, utc_timestamp?: string): Promise<{ text: string; groundingChunks: any[] }> => {
+    const ai = getAiClient();
+    const now = new Date();
+    // Default to today if no timestamp provided
+    const matchDate = utc_timestamp ? utc_timestamp : now.toISOString();
+    const matchId = generateMatchId(home, away, matchDate);
+
+    console.log(`🔍 Buscando análisis para ID: ${matchId}`);
+
+    // 1. CHECK SUPABASE (Smart Fetch)
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('global_predictions')
+                .select('*')
+                .eq('match_id', matchId)
+                .single();
+
+            if (data && !error) {
+                const lastUpdated = new Date(data.last_updated);
+                const hoursDiff = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+
+                // If fresh (< 4 hours), return DB data
+                if (hoursDiff < 4) {
+                    console.log("✅ Análisis encontrado en Caché (Fresco)");
+                    // Parse if it was stored as stringified JSON or just return text if simply stored
+                    return { 
+                        text: data.analysis_data, 
+                        groundingChunks: [] // We might not store chunks in DB for simplicity, or could add a column
+                    };
+                } else {
+                    console.log("⚠️ Análisis encontrado pero CADUCADO (>4h). Regenerando...");
+                }
+            }
+        } catch (err) {
+            console.warn("Supabase check failed (offline? config missing?), falling back to direct AI.", err);
+        }
+    } else {
+        console.log("ℹ️ Supabase no configurado. Saltando caché global.");
+    }
+
+    // 2. CALL AI (Gemini)
+    // We use a fresh generateContent call instead of the chat session to ensure 
+    // we can control temperature and it's an isolated request.
+    try {
+        const dateString = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const prompt = `
+        [SISTEMA: Fecha Actual: ${dateString}]
+        Analiza el partido ${home} vs ${away} de la liga ${league}.
+        Sigue ESTRUCTRICTAMENTE el formato 'Matador' definido en tus instrucciones del sistema.
+        Usa Deep Dive: Busca árbitros, bajas, xG y cuotas actualizadas.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                temperature: 0, // MAX CONSISTENCY
+                tools: [{ googleSearch: {} }],
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' }
+                ]
+            }
+        });
+
+        const text = response.text || "Análisis no disponible.";
+        // @ts-ignore
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+        // 3. UPSERT TO SUPABASE (Only if configured)
+        if (supabase) {
+            try {
+                 // We use upsert to handle both Insert (new) and Update (expired)
+                const { error: upsertError } = await supabase
+                    .from('global_predictions')
+                    .upsert({
+                        match_id: matchId,
+                        analysis_data: text,
+                        last_updated: new Date().toISOString()
+                    }, { onConflict: 'match_id' });
+                
+                if (upsertError) console.error("Error saving to Supabase:", upsertError);
+
+            } catch (dbErr) {
+                console.error("Failed to save to DB:", dbErr);
+            }
+        }
+
+        return { text, groundingChunks };
+
+    } catch (error: any) {
+        console.error("Gemini Generation Error:", error);
+        throw error;
+    }
+};
+
 export const fetchTopMatches = async (): Promise<Match[]> => {
     try {
         const ai = getAiClient();
         const now = new Date();
         const dateString = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
-        // Robust prompt asking for JSON specifically with strict ISO 8601 Timestamp
         const prompt = `Fecha actual: ${dateString}.
         Busca en Google "Partidos de fútbol hoy calendario completo resultados".
         
@@ -120,9 +229,7 @@ export const fetchTopMatches = async (): Promise<Match[]> => {
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                // responseMimeType: "application/json", // REMOVED: Conflict with googleSearch
                 tools: [{ googleSearch: {} }],
-                // CRITICAL: Disable safety settings here too
                 safetySettings: [
                     { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
                     { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
@@ -135,10 +242,8 @@ export const fetchTopMatches = async (): Promise<Match[]> => {
         let text = response.text;
         if (!text) return [];
 
-        // Defensive cleaning: remove markdown code blocks if the model ignores the instruction
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
         
-        // Find the start and end of the JSON array to avoid parsing errors if there is extra text
         const firstBracket = text.indexOf('[');
         const lastBracket = text.lastIndexOf(']');
         

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Match } from '../types';
-import { fetchTopMatches, sendMessageToGemini } from '../services/geminiService';
+import { fetchTopMatches, analyzeMatch } from '../services/geminiService';
 import { Loader2, TrendingUp, Clock, Trophy, ArrowRight, RefreshCw, FileText, CheckCircle2 } from 'lucide-react';
 import { MatchDetailModal } from './MatchDetailModal';
 
@@ -9,7 +9,7 @@ interface MatchesViewProps {
     // Empty props as logic is internal now
 }
 
-const CACHE_KEY = 'matador_matches_cache_v2';
+const CACHE_KEY = 'matador_matches_cache_v3'; // Incremented cache version
 
 export const MatchesView: React.FC<MatchesViewProps> = () => {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -25,7 +25,9 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
     setIsLoadingList(true);
     setError(false);
 
-    const todayStr = new Date().toLocaleDateString();
+    // Force strict date check: Only show matches for "today" in local time
+    const checkDate = new Date();
+    const localTodayStr = checkDate.toLocaleDateString();
 
     // 1. Try to load from Cache first (if not forcing refresh)
     if (!forceRefresh) {
@@ -34,7 +36,7 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
             try {
                 const parsed = JSON.parse(cachedData);
                 // Check if the cache is from today and has data
-                if (parsed.date === todayStr && parsed.matches && parsed.matches.length > 0) {
+                if (parsed.date === localTodayStr && parsed.matches && parsed.matches.length > 0) {
                     setMatches(parsed.matches);
                     setIsLoadingList(false);
                     return; // Exit early, use cache
@@ -47,17 +49,37 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
 
     // 2. Fetch from AI if no cache or forced refresh
     try {
-      const data = await fetchTopMatches();
-      if (data && data.length > 0) {
-          setMatches(data);
+      const rawData = await fetchTopMatches();
+      
+      // Strict Client-Side Filter: Only allow matches that fall on "Today" in user's local time
+      const todayMatches = rawData.filter(m => {
+          if (!m.utc_timestamp) return true; // Keep if no time provided (fallback)
+          const matchDate = new Date(m.utc_timestamp);
+          return matchDate.toLocaleDateString() === localTodayStr;
+      });
+
+      if (todayMatches && todayMatches.length > 0) {
+          setMatches(todayMatches);
           
           // 3. Save to Cache
           localStorage.setItem(CACHE_KEY, JSON.stringify({
-              date: todayStr,
-              matches: data
+              date: localTodayStr,
+              matches: todayMatches
           }));
       } else {
-          setError(true);
+          // If 0 matches found for today (or API fail), keep state empty but don't error hard if it was just a filter issue
+           if (rawData.length > 0) {
+              // API returned matches but none for today? Maybe show them anyway or show empty
+              // For now, let's show what we got but warn console
+              console.log("No matches matched strict filter, showing raw results as fallback");
+              setMatches(rawData);
+              localStorage.setItem(CACHE_KEY, JSON.stringify({
+                  date: localTodayStr,
+                  matches: rawData
+              }));
+           } else {
+              setError(true);
+           }
       }
     } catch (err) {
       console.error(err);
@@ -80,18 +102,18 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
   const handleAnalyzeClick = async (index: number) => {
       const match = matches[index];
 
-      // CASE A: Analysis already exists
+      // CASE A: Analysis already exists in Local State
       if (match.analysis) {
           setSelectedMatch(match);
           setIsModalOpen(true);
           return;
       }
 
-      // CASE B: Fetch Analysis
+      // CASE B: Fetch Analysis (Smart Fetch via Supabase/Gemini)
       setAnalyzingIndex(index);
       try {
-          const prompt = `Analiza el partido ${match.home} vs ${match.away} de la liga ${match.league}.`;
-          const response = await sendMessageToGemini(prompt);
+          // Use the new analyzeMatch function which handles the Supabase caching
+          const response = await analyzeMatch(match.home, match.away, match.league, match.utc_timestamp);
 
           // Update the specific match with the analysis
           const updatedMatches = [...matches];
@@ -103,7 +125,7 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
 
           setMatches(updatedMatches);
           
-          // Persist to LocalStorage
+          // Persist to LocalStorage (so we don't even need to hit Supabase again for this session)
           const todayStr = new Date().toLocaleDateString();
           localStorage.setItem(CACHE_KEY, JSON.stringify({
               date: todayStr,
