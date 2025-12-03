@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Bet } from '../types';
-import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon, EyeOff } from 'lucide-react';
+import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon, EyeOff, Link, ChevronDown, ChevronUp } from 'lucide-react';
 import { AddBetModal } from './AddBetModal';
 import { EditBankrollModal } from './EditBankrollModal';
 import confetti from 'canvas-confetti';
@@ -31,6 +31,7 @@ export const StatsView: React.FC = () => {
   const [initialBankroll, setInitialBankroll] = useState(1000);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
+  const [expandedBets, setExpandedBets] = useState<string[]>([]);
   
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
   const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
@@ -92,6 +93,12 @@ export const StatsView: React.FC = () => {
     if(window.confirm("¿Eliminar este registro?")) {
         setBets(prev => prev.filter(b => b.id !== id));
     }
+  };
+
+  const toggleExpand = (id: string) => {
+      setExpandedBets(prev => 
+          prev.includes(id) ? prev.filter(bid => bid !== id) : [...prev, id]
+      );
   };
 
   const handleStatusChange = (id: string, newStatus: 'pending' | 'won' | 'lost') => {
@@ -362,58 +369,92 @@ export const StatsView: React.FC = () => {
                      <p className="text-sm">Registra tu primera apuesta para ver la magia.</p>
                  </div>
              ) : (
-                 bets.map((bet) => (
-                     <div key={bet.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex justify-between items-center shadow-sm hover:border-slate-700 transition-colors group">
-                         <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                             {/* Status Dot */}
-                             <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                 bet.result === 'won' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
-                                 bet.result === 'lost' ? 'bg-rose-500' :
-                                 'bg-slate-600'
-                             }`} />
-                             
-                             <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                     {bet.sport && (
-                                         <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-                                             {bet.sport === 'football' ? 'FUT' : bet.sport === 'basketball' ? 'BAL' : bet.sport === 'tennis' ? 'TEN' : bet.sport === 'esports' ? 'ESP' : 'GEN'}
-                                         </span>
-                                     )}
-                                     <p className="text-white font-medium text-sm truncate">{bet.event}</p>
+                 bets.map((bet) => {
+                     const isCombined = bet.type === 'combined';
+                     const isExpanded = expandedBets.includes(bet.id);
+                     
+                     return (
+                     <div key={bet.id} className="group flex flex-col bg-slate-900 border border-slate-800 rounded-lg shadow-sm hover:border-slate-700 transition-colors">
+                         <div className="p-3 flex justify-between items-center">
+                            <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                                {/* Status Dot */}
+                                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                    bet.result === 'won' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                                    bet.result === 'lost' ? 'bg-rose-500' :
+                                    'bg-slate-600'
+                                }`} />
+                                
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        {bet.sport && (
+                                            <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                                                {bet.sport === 'football' ? 'FUT' : bet.sport === 'basketball' ? 'BAL' : bet.sport === 'tennis' ? 'TEN' : bet.sport === 'esports' ? 'ESP' : 'GEN'}
+                                            </span>
+                                        )}
+                                        {isCombined && (
+                                            <span className="text-[9px] uppercase font-bold text-rose-400 bg-rose-950/20 px-1.5 py-0.5 rounded border border-rose-900/50 flex items-center gap-1">
+                                                <Link size={8} /> COMBINADA
+                                            </span>
+                                        )}
+                                        <p className="text-white font-medium text-sm truncate flex-1">{bet.event}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                                        <span className="font-mono text-slate-400">{new Date(bet.date).toLocaleDateString()}</span>
+                                        <span>Stake: <span className={`text-slate-300 ${isZenMode ? 'blur-[2px]' : ''}`}>{isZenMode ? '***' : bet.stake + '€'}</span></span>
+                                        <span>@ <span className="text-slate-300">{bet.odds}</span></span>
+                                        {isCombined && (
+                                            <button 
+                                                onClick={() => toggleExpand(bet.id)}
+                                                className="ml-auto text-slate-400 hover:text-white flex items-center gap-1 text-[10px] bg-slate-800 px-1.5 py-0.5 rounded"
+                                            >
+                                                {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                                Ver Selecciones
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                                     <span className="font-mono text-slate-400">{new Date(bet.date).toLocaleDateString()}</span>
-                                     <span>Stake: <span className={`text-slate-300 ${isZenMode ? 'blur-[2px]' : ''}`}>{isZenMode ? '***' : bet.stake + '€'}</span></span>
-                                     <span>@ <span className="text-slate-300">{bet.odds}</span></span>
-                                </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                                <select 
+                                    value={bet.result}
+                                    onChange={(e) => handleStatusChange(bet.id, e.target.value as any)}
+                                    className={`text-[10px] font-bold uppercase px-2 py-1.5 rounded cursor-pointer outline-none border border-transparent transition-colors appearance-none text-center min-w-[70px] ${
+                                        bet.result === 'won' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                                        bet.result === 'lost' ? 'bg-rose-950/30 text-rose-400 border-rose-900/50' :
+                                        'bg-slate-800 text-slate-400 border-slate-700'
+                                    }`}
+                                >
+                                    <option value="pending">⏳ Pend.</option>
+                                    <option value="won">✅ Ganada</option>
+                                    <option value="lost">❌ Perdida</option>
+                                </select>
+                                
+                                <button 
+                                    onClick={() => handleDeleteBet(bet.id)}
+                                    className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-950/30 rounded-lg transition-all"
+                                    title="Eliminar apuesta"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                         </div>
+
+                         {/* Expanded Selections */}
+                         {isCombined && isExpanded && bet.selections && (
+                             <div className="px-4 pb-3 pt-0 animate-fade-in">
+                                 <div className="bg-slate-950/50 rounded-lg p-2 space-y-1.5 border border-slate-800/50">
+                                     {bet.selections.map((sel, idx) => (
+                                         <div key={idx} className="flex justify-between items-center text-xs text-slate-400">
+                                             <span className="truncate flex-1 pr-2">▪ {sel.event}</span>
+                                             <span className="font-mono text-slate-500">@{sel.odds}</span>
+                                         </div>
+                                     ))}
+                                 </div>
                              </div>
-                         </div>
-                         
-                         <div className="flex items-center gap-2">
-                             <select 
-                                value={bet.result}
-                                onChange={(e) => handleStatusChange(bet.id, e.target.value as any)}
-                                className={`text-[10px] font-bold uppercase px-2 py-1.5 rounded cursor-pointer outline-none border border-transparent transition-colors appearance-none text-center min-w-[70px] ${
-                                    bet.result === 'won' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
-                                    bet.result === 'lost' ? 'bg-rose-950/30 text-rose-400 border-rose-900/50' :
-                                    'bg-slate-800 text-slate-400 border-slate-700'
-                                }`}
-                             >
-                                 <option value="pending">⏳ Pend.</option>
-                                 <option value="won">✅ Ganada</option>
-                                 <option value="lost">❌ Perdida</option>
-                             </select>
-                             
-                             <button 
-                                onClick={() => handleDeleteBet(bet.id)}
-                                className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-950/30 rounded-lg transition-all"
-                                title="Eliminar apuesta"
-                             >
-                                <Trash2 size={16} />
-                             </button>
-                         </div>
+                         )}
                      </div>
-                 ))
+                 )})
              )}
          </div>
       </div>

@@ -42,11 +42,19 @@ export interface Match {
   groundingChunks?: GroundingChunk[]; // Stores sources
 }
 
+export interface BetSelection {
+  id: string;
+  event: string;
+  odds: number;
+}
+
 export interface Bet {
   id: string;
   date: number; // Timestamp
-  event: string;
-  sport?: string; // New field for sport filtering
+  event: string; // For simple bets, the event name. For combined, a summary title.
+  type: 'simple' | 'combined'; // New field
+  selections?: BetSelection[]; // New field for combined bets
+  sport?: string; 
   stake: number;
   odds: number;
   result: 'pending' | 'won' | 'lost';
