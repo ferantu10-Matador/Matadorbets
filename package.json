@@ -17,7 +17,8 @@
     "remark-gfm": "^4.0.0",
     "recharts": "^2.12.0",
     "prop-types": "^15.8.1",
-    "clsx": "^2.1.0"
+    "clsx": "^2.1.0",
+    "canvas-confetti": "^1.9.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.64",
@@ -25,6 +26,7 @@
     "@types/node": "^20.11.24",
     "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.3.3",
-    "vite": "^5.1.6"
+    "vite": "^5.1.6",
+    "@types/canvas-confetti": "^1.6.4"
   }
 }

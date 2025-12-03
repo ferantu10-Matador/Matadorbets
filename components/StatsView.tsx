@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Bet } from '../types';
-import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon } from 'lucide-react';
+import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon, EyeOff } from 'lucide-react';
 import { AddBetModal } from './AddBetModal';
 import { EditBankrollModal } from './EditBankrollModal';
+import confetti from 'canvas-confetti';
 import {
   AreaChart,
   Area,
@@ -20,6 +21,7 @@ import {
 
 const STORAGE_KEY_BETS = 'matador_bets_history';
 const STORAGE_KEY_CONFIG = 'matador_bankroll_config';
+const STORAGE_KEY_ZEN = 'matador_hide_balance';
 
 // Colors for Pie Chart
 const COLORS = ['#10b981', '#f43f5e', '#64748b']; // Green, Red, Gray
@@ -28,6 +30,7 @@ export const StatsView: React.FC = () => {
   const [bets, setBets] = useState<Bet[]>([]);
   const [initialBankroll, setInitialBankroll] = useState(1000);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
   
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
   const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
@@ -56,6 +59,11 @@ export const StatsView: React.FC = () => {
             console.error("Error parsing config", e);
         }
     }
+
+    // Zen Mode
+    const zenSetting = localStorage.getItem(STORAGE_KEY_ZEN);
+    setIsZenMode(zenSetting === 'true');
+
     setIsLoaded(true);
   }, []);
 
@@ -88,6 +96,33 @@ export const StatsView: React.FC = () => {
 
   const handleStatusChange = (id: string, newStatus: 'pending' | 'won' | 'lost') => {
       setBets(prev => prev.map(b => b.id === id ? { ...b, result: newStatus } : b));
+
+      // Celebration Logic
+      if (newStatus === 'won') {
+        // 1. Haptic Feedback
+        if (typeof window !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(200);
+        }
+
+        // 2. Confetti Explosion
+        const count = 200;
+        const defaults = {
+            origin: { y: 0.7 },
+            colors: ['#10b981', '#fbbf24', '#34d399', '#F59E0B'] // Emerald & Gold
+        };
+
+        function fire(particleRatio: number, opts: any) {
+            confetti(Object.assign({}, defaults, opts, {
+                particleCount: Math.floor(count * particleRatio)
+            }));
+        }
+
+        fire(0.25, { spread: 26, startVelocity: 55 });
+        fire(0.20, { spread: 60 });
+        fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+        fire(0.10, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+        fire(0.10, { spread: 120, startVelocity: 45 });
+      }
   };
 
   // Calculate KPIs
@@ -112,7 +147,7 @@ export const StatsView: React.FC = () => {
     });
 
     const roi = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0;
-    const yieldVal = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0; // Same as ROI in simple terms but conceptually different in some contexts, keeping standard formula
+    const yieldVal = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0; 
 
     return {
       currentBankroll,
@@ -154,6 +189,13 @@ export const StatsView: React.FC = () => {
       ];
   }, [bets]);
 
+  const formatMoney = (amount: number, forceSign: boolean = false) => {
+      if (isZenMode) return '**** €';
+      const formatted = amount.toFixed(0);
+      const sign = amount > 0 && forceSign ? '+' : '';
+      return `${sign}${formatted}€`;
+  };
+
   if (!isLoaded) return null;
 
   return (
@@ -166,14 +208,21 @@ export const StatsView: React.FC = () => {
             Gestión de Cartera
         </h2>
         
-        <button 
-            onClick={() => setIsBankrollModalOpen(true)}
-            className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-900 hover:bg-slate-800 hover:text-rose-400 px-3 py-1.5 rounded-lg border border-slate-800 transition-all group"
-        >
-           <Settings size={12} className="group-hover:rotate-45 transition-transform" />
-           Inicio: {initialBankroll}€
-           <Edit2 size={10} className="opacity-50" />
-        </button>
+        <div className="flex gap-2">
+            {isZenMode && (
+                <div className="flex items-center gap-1 bg-purple-900/30 text-purple-400 px-2 py-1 rounded-lg text-xs font-bold border border-purple-500/30">
+                    <EyeOff size={12} /> Zen
+                </div>
+            )}
+            <button 
+                onClick={() => setIsBankrollModalOpen(true)}
+                className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-900 hover:bg-slate-800 hover:text-rose-400 px-3 py-1.5 rounded-lg border border-slate-800 transition-all group"
+            >
+            <Settings size={12} className="group-hover:rotate-45 transition-transform" />
+            Inicio: {formatMoney(initialBankroll)}
+            <Edit2 size={10} className="opacity-50" />
+            </button>
+        </div>
       </div>
 
       {/* KPI Cards Grid */}
@@ -182,8 +231,8 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 bg-emerald-500/10 w-16 h-16 rounded-full group-hover:bg-emerald-500/20 transition-colors"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Bankroll</p>
-            <p className={`text-lg font-bold font-mono ${stats.currentBankroll >= initialBankroll ? 'text-emerald-400' : 'text-rose-400'}`}>
-               {stats.currentBankroll.toFixed(0)}€
+            <p className={`text-lg font-bold font-mono ${stats.currentBankroll >= initialBankroll ? 'text-emerald-400' : 'text-rose-400'} ${isZenMode ? 'blur-sm select-none' : ''}`}>
+               {formatMoney(stats.currentBankroll)}
             </p>
         </div>
 
@@ -191,8 +240,8 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
              <div className="absolute -right-4 -top-4 bg-blue-500/10 w-16 h-16 rounded-full"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Neto</p>
-            <p className={`text-lg font-bold font-mono ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-               {stats.netProfit > 0 ? '+' : ''}{stats.netProfit.toFixed(0)}€
+            <p className={`text-lg font-bold font-mono ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} ${isZenMode ? 'blur-sm select-none' : ''}`}>
+               {formatMoney(stats.netProfit, true)}
             </p>
         </div>
 
@@ -244,12 +293,13 @@ export const StatsView: React.FC = () => {
                       axisLine={false} 
                       tickLine={false}
                       width={35}
+                      tickFormatter={(value) => isZenMode ? '***' : value}
                    />
                    <Tooltip 
                       contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
                       itemStyle={{ color: '#10b981' }}
                       labelStyle={{ display: 'none' }}
-                      formatter={(value: any) => [`${value}€`, 'Bankroll']}
+                      formatter={(value: any) => [isZenMode ? '**** €' : `${value}€`, 'Bankroll']}
                    />
                    <ReferenceLine y={initialBankroll} stroke="#ef4444" strokeDasharray="3 3" opacity={0.5} />
                    <Area 
@@ -333,7 +383,7 @@ export const StatsView: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
                                      <span className="font-mono text-slate-400">{new Date(bet.date).toLocaleDateString()}</span>
-                                     <span>Stake: <span className="text-slate-300">{bet.stake}€</span></span>
+                                     <span>Stake: <span className={`text-slate-300 ${isZenMode ? 'blur-[2px]' : ''}`}>{isZenMode ? '***' : bet.stake + '€'}</span></span>
                                      <span>@ <span className="text-slate-300">{bet.odds}</span></span>
                                 </div>
                              </div>

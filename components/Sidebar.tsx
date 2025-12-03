@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MessageSquare, CalendarDays, BarChart2, X, ChevronRight, Settings, TrendingUp } from 'lucide-react';
+import { MessageSquare, CalendarDays, BarChart2, X, ChevronRight, Settings, TrendingUp, GraduationCap } from 'lucide-react';
 import { ViewType, Bet } from '../types';
 import { MatadorLogo } from './MatadorLogo';
 
@@ -142,6 +142,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentView, 
       label: 'Estadísticas', 
       icon: <BarChart2 size={20} />, 
       desc: 'Base de Datos (Beta)' 
+    },
+    { 
+      id: 'academy' as ViewType, 
+      label: 'Academia', 
+      icon: <GraduationCap size={20} />, 
+      desc: 'Guía Educativa' 
     },
   ];
 

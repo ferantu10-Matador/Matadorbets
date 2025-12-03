@@ -52,4 +52,13 @@ export interface Bet {
   result: 'pending' | 'won' | 'lost';
 }
 
-export type ViewType = 'chat' | 'matches' | 'stats' | 'settings';
+export interface Lesson {
+  id: number;
+  level: string;
+  title: string;
+  concept: string;
+  example: string;
+  tip: string;
+}
+
+export type ViewType = 'chat' | 'matches' | 'stats' | 'settings' | 'academy';
