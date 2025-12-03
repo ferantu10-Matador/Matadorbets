@@ -69,4 +69,12 @@ export interface Lesson {
   tip: string;
 }
 
+export interface UserProfile {
+  id?: string;
+  username: string;
+  secret_pin: string;
+  backup_data: any;
+  updated_at?: string;
+}
+
 export type ViewType = 'chat' | 'matches' | 'stats' | 'settings' | 'academy';
