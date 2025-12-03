@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Plus, Trash2, Link, Layers } from 'lucide-react';
-import { Bet, BetSelection } from '../types';
+import { X, Save, Plus, Trash2, Link, Calculator, TrendingUp } from 'lucide-react';
+import { Bet, BetSelection, BetMarket } from '../types';
 
 interface AddBetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (bet: Omit<Bet, 'id' | 'date'>) => void;
+  currentBankroll: number;
 }
 
-export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSave }) => {
+export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSave, currentBankroll }) => {
   const [betType, setBetType] = useState<'simple' | 'combined'>('simple');
   const [event, setEvent] = useState('');
-  const [sport, setSport] = useState('football');
+  const [market, setMarket] = useState<BetMarket>('1X2');
   const [stake, setStake] = useState('');
   const [odds, setOdds] = useState('');
   const [result, setResult] = useState<'pending' | 'won' | 'lost'>('pending');
   
+  // Kelly Calculator State
+  const [showKelly, setShowKelly] = useState(false);
+  const [confidence, setConfidence] = useState(50);
+  const [kellySuggestion, setKellySuggestion] = useState<number | null>(null);
+
   // Combined Bets State
   const [selections, setSelections] = useState<Omit<BetSelection, 'id'>[]>([
       { event: '', odds: 0 },
@@ -28,7 +34,6 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
         const total = selections.reduce((acc, curr) => {
             return acc * (curr.odds > 0 ? curr.odds : 1);
         }, 1);
-        // Only update if total is greater than 1 and we have valid selections
         if (total > 1 && selections.some(s => s.odds > 0)) {
             setOdds(total.toFixed(2));
         } else {
@@ -36,6 +41,37 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
         }
     }
   }, [selections, betType]);
+
+  // Kelly Calculation Logic
+  useEffect(() => {
+      if (showKelly && odds && parseFloat(odds) > 1 && currentBankroll > 0) {
+          const b = parseFloat(odds) - 1; // Net odds
+          const p = confidence / 100; // Probability (0.55)
+          const q = 1 - p; // Loss Probability
+          
+          // Full Kelly Formula
+          const f = (b * p - q) / b;
+          
+          // Fractional Kelly (1/4) - Safer for sports betting
+          const fraction = 0.25;
+          const safeF = f * fraction;
+
+          if (safeF > 0) {
+              const suggestedStake = currentBankroll * safeF;
+              setKellySuggestion(parseFloat(suggestedStake.toFixed(2)));
+          } else {
+              setKellySuggestion(0);
+          }
+      } else {
+          setKellySuggestion(null);
+      }
+  }, [odds, confidence, showKelly, currentBankroll]);
+
+  const applyKelly = () => {
+      if (kellySuggestion !== null && kellySuggestion > 0) {
+          setStake(kellySuggestion.toString());
+      }
+  };
 
   if (!isOpen) return null;
 
@@ -68,7 +104,6 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
     if (betType === 'simple' && !event) return;
     if (betType === 'combined' && selections.some(s => !s.event || s.odds <= 0)) return;
 
-    // Construct the Bet object
     const finalEventName = betType === 'simple' 
         ? event 
         : `Combinada (${selections.length} sel.)`;
@@ -77,11 +112,14 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
         ? selections.map((s, i) => ({ id: `sel-${Date.now()}-${i}`, event: s.event, odds: s.odds }))
         : undefined;
 
+    const finalMarket = betType === 'combined' ? 'PARLAY' : market;
+
     onSave({
       event: finalEventName,
       type: betType,
       selections: finalSelections,
-      sport,
+      sport: 'football', // Default to football now
+      market: finalMarket,
       stake: parseFloat(stake),
       odds: parseFloat(odds),
       result
@@ -91,7 +129,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
     setEvent('');
     setStake('');
     setOdds('');
-    setSport('football');
+    setMarket('1X2');
     setResult('pending');
     setSelections([{ event: '', odds: 0 }, { event: '', odds: 0 }]);
     onClose();
@@ -113,7 +151,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
                 onClick={() => setBetType('simple')}
                 className={`flex-1 py-3 text-sm font-bold transition-colors ${
                     betType === 'simple' 
-                        ? 'text-rose-500 border-b-2 border-rose-500 bg-slate-800/50' 
+                        ? 'text-emerald-500 border-b-2 border-emerald-500 bg-slate-800/50' 
                         : 'text-slate-500 hover:text-slate-300'
                 }`}
             >
@@ -133,32 +171,35 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           
-          {/* Sport Selector */}
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Deporte</label>
-            <select
-               value={sport}
-               onChange={(e) => setSport(e.target.value)}
-               className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-rose-500 transition-colors appearance-none"
-            >
-                <option value="football">⚽ Fútbol</option>
-                <option value="basketball">🏀 Baloncesto</option>
-                <option value="tennis">🎾 Tenis</option>
-                <option value="esports">🎮 eSports</option>
-                <option value="other">🎲 Otro</option>
-            </select>
-          </div>
+          {/* Market Selector (Only for Simple) */}
+          {betType === 'simple' && (
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Mercado de Fútbol</label>
+                <select
+                   value={market}
+                   onChange={(e) => setMarket(e.target.value as BetMarket)}
+                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors appearance-none"
+                >
+                    <option value="1X2">🏆 Ganador del Partido (1X2)</option>
+                    <option value="GOALS">⚽ Goles (Over/Under)</option>
+                    <option value="BTTS">🥅 Ambos Marcan (BTTS)</option>
+                    <option value="HANDICAP">⚖️ Hándicap Asiático</option>
+                    <option value="CORNERS_CARDS">🚩 Córners / Tarjetas</option>
+                    <option value="OTHER">🎲 Otro / Especial</option>
+                </select>
+              </div>
+          )}
 
           {/* EVENTS INPUT */}
           {betType === 'simple' ? (
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Evento / Partido</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Partido</label>
                 <input
                   type="text"
                   value={event}
                   onChange={(e) => setEvent(e.target.value)}
                   placeholder="Ej: Real Madrid vs City"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-rose-500 transition-colors"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
                   required
                 />
               </div>
@@ -177,7 +218,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
                                   value={sel.event}
                                   onChange={(e) => handleSelectionChange(idx, 'event', e.target.value)}
                                   placeholder={`Partido ${idx + 1}`}
-                                  className="col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+                                  className="col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                                   required
                               />
                               <input
@@ -186,7 +227,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
                                   value={sel.odds || ''}
                                   onChange={(e) => handleSelectionChange(idx, 'odds', e.target.value)}
                                   placeholder="1.50"
-                                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+                                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                                   required
                               />
                           </div>
@@ -214,18 +255,6 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
 
           <div className="grid grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Inversión (€)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={stake}
-                onChange={(e) => setStake(e.target.value)}
-                placeholder="10.00"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-rose-500 transition-colors"
-                required
-              />
-            </div>
-            <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                   {betType === 'combined' ? 'Cuota Total' : 'Cuota (@)'}
               </label>
@@ -235,11 +264,74 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
                 value={odds}
                 onChange={(e) => setOdds(e.target.value)}
                 placeholder="1.90"
-                className={`w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-rose-500 transition-colors ${betType === 'combined' ? 'font-bold text-emerald-400 bg-slate-900' : ''}`}
+                className={`w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors ${betType === 'combined' ? 'font-bold text-emerald-400 bg-slate-900' : ''}`}
                 required
                 readOnly={betType === 'combined'} 
               />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Inversión (€)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={stake}
+                onChange={(e) => setStake(e.target.value)}
+                placeholder="10.00"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                required
+              />
+            </div>
+          </div>
+
+          {/* KELLY CRITERION CALCULATOR */}
+          <div className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+              <button 
+                  type="button"
+                  onClick={() => setShowKelly(!showKelly)}
+                  className="w-full flex items-center justify-between p-3 text-xs text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+              >
+                  <span className="flex items-center gap-2 font-bold"><Calculator size={14} /> Asistente de Stake (Kelly)</span>
+                  <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded border border-slate-700">Beta</span>
+              </button>
+              
+              {showKelly && (
+                  <div className="p-3 pt-0 border-t border-slate-700/50 space-y-3 animate-fade-in">
+                      <div>
+                          <label className="flex justify-between text-xs text-slate-400 mb-1">
+                              <span>Tu Confianza Real</span>
+                              <span className="text-white font-mono">{confidence}%</span>
+                          </label>
+                          <input 
+                              type="range" 
+                              min="1" 
+                              max="99" 
+                              value={confidence} 
+                              onChange={(e) => setConfidence(parseInt(e.target.value))}
+                              className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                          />
+                      </div>
+                      
+                      {kellySuggestion !== null && (
+                          <div className="flex items-center justify-between bg-emerald-950/20 border border-emerald-900/50 p-2 rounded-lg">
+                              <div className="text-xs">
+                                  <span className="text-slate-400 block">Stake Sugerido (1/4 Kelly):</span>
+                                  <span className={`font-bold font-mono ${kellySuggestion > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                      {kellySuggestion > 0 ? `${kellySuggestion}€` : 'No apostar'}
+                                  </span>
+                              </div>
+                              {kellySuggestion > 0 && (
+                                  <button 
+                                      type="button" 
+                                      onClick={applyKelly}
+                                      className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-sm"
+                                  >
+                                      Aplicar
+                                  </button>
+                              )}
+                          </div>
+                      )}
+                  </div>
+              )}
           </div>
 
           <div>
@@ -283,7 +375,7 @@ export const AddBetModal: React.FC<AddBetModalProps> = ({ isOpen, onClose, onSav
 
           <button
             type="submit"
-            className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-900/20 flex items-center justify-center gap-2 mt-4"
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 mt-4"
           >
             <Save size={18} />
             {betType === 'combined' ? 'Guardar Combinada' : 'Guardar Apuesta'}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Bet } from '../types';
-import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon, EyeOff, Link, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Activity, DollarSign, Settings, Edit2, Trash2, PieChart as PieChartIcon, EyeOff, Link, ChevronDown, ChevronUp, BarChart2, TrendingDown } from 'lucide-react';
 import { AddBetModal } from './AddBetModal';
 import { EditBankrollModal } from './EditBankrollModal';
 import confetti from 'canvas-confetti';
@@ -16,7 +16,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  BarChart,
+  Bar
 } from 'recharts';
 
 const STORAGE_KEY_BETS = 'matador_bets_history';
@@ -106,24 +108,19 @@ export const StatsView: React.FC = () => {
 
       // Celebration Logic
       if (newStatus === 'won') {
-        // 1. Haptic Feedback
         if (typeof window !== 'undefined' && navigator.vibrate) {
             navigator.vibrate(200);
         }
-
-        // 2. Confetti Explosion
         const count = 200;
         const defaults = {
             origin: { y: 0.7 },
-            colors: ['#10b981', '#fbbf24', '#34d399', '#F59E0B'] // Emerald & Gold
+            colors: ['#10b981', '#fbbf24', '#34d399', '#F59E0B']
         };
-
         function fire(particleRatio: number, opts: any) {
             confetti(Object.assign({}, defaults, opts, {
                 particleCount: Math.floor(count * particleRatio)
             }));
         }
-
         fire(0.25, { spread: 26, startVelocity: 55 });
         fire(0.20, { spread: 60 });
         fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
@@ -132,18 +129,22 @@ export const StatsView: React.FC = () => {
       }
   };
 
-  // Calculate KPIs
-  const stats = useMemo(() => {
+  // --- ANALYTICS CALCULATIONS ---
+
+  const analytics = useMemo(() => {
     let currentBankroll = initialBankroll;
     let netProfit = 0;
     let totalInvested = 0;
+    let maxBankroll = initialBankroll;
+    let maxDrawdown = 0;
 
-    // Filter settled bets for calculations
-    const settledBets = bets.filter(b => b.result !== 'pending');
+    // Sort bets for calculation
+    const settledBets = [...bets].filter(b => b.result !== 'pending').sort((a, b) => a.date - b.date);
 
     settledBets.forEach(bet => {
+      let profit = 0;
       if (bet.result === 'won') {
-        const profit = (bet.stake * bet.odds) - bet.stake;
+        profit = (bet.stake * bet.odds) - bet.stake;
         netProfit += profit;
         currentBankroll += profit;
       } else if (bet.result === 'lost') {
@@ -151,40 +152,107 @@ export const StatsView: React.FC = () => {
         currentBankroll -= bet.stake;
       }
       totalInvested += bet.stake;
+
+      // Drawdown Calculation
+      if (currentBankroll > maxBankroll) {
+          maxBankroll = currentBankroll;
+      }
+      const drawdown = maxBankroll > 0 ? (maxBankroll - currentBankroll) / maxBankroll : 0;
+      if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+      }
     });
 
     const roi = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0;
     const yieldVal = totalInvested > 0 ? (netProfit / totalInvested) * 100 : 0; 
+    const avgProfitPerBet = settledBets.length > 0 ? netProfit / settledBets.length : 0;
 
     return {
       currentBankroll,
       netProfit,
       roi,
-      yieldVal
+      yieldVal,
+      maxDrawdown: maxDrawdown * 100,
+      avgProfitPerBet,
+      totalBetsCount: settledBets.length
     };
   }, [bets, initialBankroll]);
 
-  // Area Chart Data (Bankroll Evolution)
+  // --- CHART DATA: EVOLUTION + PROJECTION ---
   const areaChartData = useMemo(() => {
     const sortedBets = [...bets].filter(b => b.result !== 'pending').sort((a, b) => a.date - b.date);
     let runningBankroll = initialBankroll;
-    const data = [{ date: 'Inicio', value: initialBankroll }];
+    
+    // Historical Data
+    const data: any[] = [{ date: 'Inicio', value: initialBankroll, projected: null }];
 
-    sortedBets.forEach(bet => {
+    sortedBets.forEach((bet, idx) => {
       if (bet.result === 'won') {
         runningBankroll += (bet.stake * bet.odds) - bet.stake;
       } else if (bet.result === 'lost') {
         runningBankroll -= bet.stake;
       }
       data.push({
-        date: new Date(bet.date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }),
-        value: Number(runningBankroll.toFixed(2))
+        date: idx + 1, // Simple index for X-axis to align projection
+        realDate: new Date(bet.date).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' }),
+        value: Number(runningBankroll.toFixed(2)),
+        projected: null
       });
     });
-    return data;
-  }, [bets, initialBankroll]);
 
-  // Pie Chart Data (Win Rate Distribution)
+    // Forecast / Projection (Next 10 bets)
+    if (analytics.totalBetsCount > 5) {
+        // Start projection from the last real point
+        const lastReal = data[data.length - 1];
+        // Ensure the line connects
+        data[data.length - 1].projected = lastReal.value;
+        
+        let projectedBankroll = lastReal.value;
+        for (let i = 1; i <= 10; i++) {
+            projectedBankroll += analytics.avgProfitPerBet;
+            data.push({
+                date: analytics.totalBetsCount + i,
+                realDate: `Futuro +${i}`,
+                value: null,
+                projected: Number(projectedBankroll.toFixed(2))
+            });
+        }
+    }
+
+    return data;
+  }, [bets, initialBankroll, analytics]);
+
+  // --- CHART DATA: X-RAY (MARKET PERFORMANCE) ---
+  const marketPerformanceData = useMemo(() => {
+      const marketGroups: Record<string, number> = {
+          '1X2': 0, 'GOALS': 0, 'BTTS': 0, 'HANDICAP': 0, 'CORNERS_CARDS': 0, 'PARLAY': 0, 'OTHER': 0
+      };
+
+      const settledBets = bets.filter(b => b.result !== 'pending');
+      
+      settledBets.forEach(bet => {
+          let pnl = 0;
+          if (bet.result === 'won') pnl = (bet.stake * bet.odds) - bet.stake;
+          if (bet.result === 'lost') pnl = -bet.stake;
+          
+          const marketKey = bet.market || 'OTHER'; // Fallback for legacy bets
+          if (marketGroups[marketKey] !== undefined) {
+              marketGroups[marketKey] += pnl;
+          } else {
+              marketGroups['OTHER'] += pnl;
+          }
+      });
+
+      // Filter out empty markets and map to array
+      return Object.keys(marketGroups)
+        .filter(key => marketGroups[key] !== 0)
+        .map(key => ({
+            name: key === 'PARLAY' ? 'Combinadas' : key === 'CORNERS_CARDS' ? 'Corners/Tarj' : key,
+            value: Number(marketGroups[key].toFixed(2))
+        }));
+  }, [bets]);
+
+  // --- CHART DATA: PIE ---
   const pieChartData = useMemo(() => {
       const won = bets.filter(b => b.result === 'won').length;
       const lost = bets.filter(b => b.result === 'lost').length;
@@ -211,8 +279,8 @@ export const StatsView: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span className="w-1 h-6 bg-rose-500 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)]"></span>
-            Gestión de Cartera
+            <span className="w-1 h-6 bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
+            Finanzas Matador
         </h2>
         
         <div className="flex gap-2">
@@ -223,7 +291,7 @@ export const StatsView: React.FC = () => {
             )}
             <button 
                 onClick={() => setIsBankrollModalOpen(true)}
-                className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-900 hover:bg-slate-800 hover:text-rose-400 px-3 py-1.5 rounded-lg border border-slate-800 transition-all group"
+                className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-900 hover:bg-slate-800 hover:text-emerald-400 px-3 py-1.5 rounded-lg border border-slate-800 transition-all group"
             >
             <Settings size={12} className="group-hover:rotate-45 transition-transform" />
             Inicio: {formatMoney(initialBankroll)}
@@ -238,8 +306,8 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 bg-emerald-500/10 w-16 h-16 rounded-full group-hover:bg-emerald-500/20 transition-colors"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Bankroll</p>
-            <p className={`text-lg font-bold font-mono ${stats.currentBankroll >= initialBankroll ? 'text-emerald-400' : 'text-rose-400'} ${isZenMode ? 'blur-sm select-none' : ''}`}>
-               {formatMoney(stats.currentBankroll)}
+            <p className={`text-lg font-bold font-mono ${analytics.currentBankroll >= initialBankroll ? 'text-emerald-400' : 'text-rose-400'} ${isZenMode ? 'blur-sm select-none' : ''}`}>
+               {formatMoney(analytics.currentBankroll)}
             </p>
         </div>
 
@@ -247,17 +315,8 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
              <div className="absolute -right-4 -top-4 bg-blue-500/10 w-16 h-16 rounded-full"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Neto</p>
-            <p className={`text-lg font-bold font-mono ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} ${isZenMode ? 'blur-sm select-none' : ''}`}>
-               {formatMoney(stats.netProfit, true)}
-            </p>
-        </div>
-
-        {/* ROI */}
-        <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 bg-purple-500/10 w-16 h-16 rounded-full"></div>
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">ROI</p>
-            <p className={`text-lg font-bold font-mono ${stats.roi >= 0 ? 'text-purple-400' : 'text-rose-400'}`}>
-               {stats.roi.toFixed(1)}%
+            <p className={`text-lg font-bold font-mono ${analytics.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'} ${isZenMode ? 'blur-sm select-none' : ''}`}>
+               {formatMoney(analytics.netProfit, true)}
             </p>
         </div>
 
@@ -265,18 +324,29 @@ export const StatsView: React.FC = () => {
         <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
             <div className="absolute -right-4 -top-4 bg-orange-500/10 w-16 h-16 rounded-full"></div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">YIELD</p>
-            <p className={`text-lg font-bold font-mono ${stats.yieldVal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-               {stats.yieldVal > 0 ? '+' : ''}{stats.yieldVal.toFixed(2)}%
+            <p className={`text-lg font-bold font-mono ${analytics.yieldVal >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+               {analytics.yieldVal > 0 ? '+' : ''}{analytics.yieldVal.toFixed(2)}%
+            </p>
+        </div>
+
+        {/* MAX DRAWDOWN */}
+        <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 bg-rose-600/10 w-16 h-16 rounded-full"></div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Max Drawdown</p>
+            <p className="text-lg font-bold font-mono text-rose-500 flex items-center gap-1">
+               <TrendingDown size={14} />
+               {analytics.maxDrawdown.toFixed(1)}%
             </p>
         </div>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid md:grid-cols-3 gap-4">
-          {/* Line Chart */}
-          <div className="md:col-span-2 bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[280px]">
+      {/* Main Charts Grid */}
+      <div className="grid md:grid-cols-2 gap-4">
+          
+          {/* 1. Main Projection Chart */}
+          <div className="md:col-span-2 bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[300px]">
              <h3 className="text-xs font-bold text-slate-500 mb-4 flex items-center gap-2">
-                <Activity size={14} /> EVOLUCIÓN BANKROLL
+                <Activity size={14} /> PROYECCIÓN DE TENDENCIA
              </h3>
              <ResponsiveContainer width="100%" height="85%">
                 <AreaChart data={areaChartData}>
@@ -285,6 +355,9 @@ export const StatsView: React.FC = () => {
                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                       </linearGradient>
+                      <pattern id="patternStripes" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
+                         <line x1="0" y1="0" x2="8" y2="8" stroke="#06b6d4" strokeWidth="1" />
+                      </pattern>
                    </defs>
                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} vertical={false} />
                    <XAxis 
@@ -304,11 +377,15 @@ export const StatsView: React.FC = () => {
                    />
                    <Tooltip 
                       contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
-                      itemStyle={{ color: '#10b981' }}
                       labelStyle={{ display: 'none' }}
-                      formatter={(value: any) => [isZenMode ? '**** €' : `${value}€`, 'Bankroll']}
+                      formatter={(value: any, name: string) => [
+                          isZenMode ? '**** €' : `${Number(value).toFixed(2)}€`, 
+                          name === 'value' ? 'Real' : 'Proyección'
+                      ]}
                    />
-                   <ReferenceLine y={initialBankroll} stroke="#ef4444" strokeDasharray="3 3" opacity={0.5} />
+                   <ReferenceLine y={initialBankroll} stroke="#64748b" strokeDasharray="3 3" opacity={0.5} />
+                   
+                   {/* Real Data Line */}
                    <Area 
                       type="monotone" 
                       dataKey="value" 
@@ -316,22 +393,65 @@ export const StatsView: React.FC = () => {
                       strokeWidth={2}
                       fillOpacity={1} 
                       fill="url(#colorValue)" 
+                      connectNulls={false}
+                   />
+                   
+                   {/* Projection Line */}
+                   <Area
+                      type="monotone"
+                      dataKey="projected"
+                      stroke="#06b6d4" // Cyan
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      fillOpacity={0.1}
+                      fill="#06b6d4"
+                      connectNulls={true}
                    />
                 </AreaChart>
              </ResponsiveContainer>
           </div>
 
-          {/* Pie Chart */}
+          {/* 2. X-Ray (Market Performance) */}
           <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[280px]">
              <h3 className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-2">
-                <PieChartIcon size={14} /> DISTRIBUCIÓN
+                <BarChart2 size={14} /> RAYOS X (Por Mercado)
+             </h3>
+             <ResponsiveContainer width="100%" height="90%">
+                <BarChart data={marketPerformanceData} layout="vertical">
+                    <XAxis type="number" hide />
+                    <YAxis 
+                        dataKey="name" 
+                        type="category" 
+                        width={80} 
+                        tick={{fill: '#94a3b8', fontSize: 10}}
+                        axisLine={false}
+                        tickLine={false}
+                    />
+                    <Tooltip 
+                         contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                         cursor={{fill: '#1e293b'}}
+                         formatter={(value: any) => [isZenMode ? '***' : `${value}€`, 'Neto']}
+                    />
+                    <Bar dataKey="value" barSize={15} radius={[0, 4, 4, 0]}>
+                        {marketPerformanceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#10b981' : '#f43f5e'} />
+                        ))}
+                    </Bar>
+                </BarChart>
+             </ResponsiveContainer>
+          </div>
+
+          {/* 3. Win Rate Pie Chart */}
+          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-inner h-[280px]">
+             <h3 className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-2">
+                <PieChartIcon size={14} /> TASA DE ACIERTO
              </h3>
              <ResponsiveContainer width="100%" height="90%">
                 <PieChart>
                     <Pie
                         data={pieChartData}
-                        innerRadius={60}
-                        outerRadius={80}
+                        innerRadius={50}
+                        outerRadius={70}
                         paddingAngle={5}
                         dataKey="value"
                     >
@@ -358,7 +478,7 @@ export const StatsView: React.FC = () => {
       {/* Bets History List */}
       <div>
          <div className="flex justify-between items-center mb-4">
-             <h3 className="font-bold text-white text-sm">Últimas Apuestas</h3>
+             <h3 className="font-bold text-white text-sm">Últimos Movimientos</h3>
              <span className="text-[10px] text-slate-500">{bets.length} registros</span>
          </div>
          
@@ -386,14 +506,14 @@ export const StatsView: React.FC = () => {
                                 
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
-                                        {bet.sport && (
-                                            <span className="text-[9px] uppercase font-bold text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
-                                                {bet.sport === 'football' ? 'FUT' : bet.sport === 'basketball' ? 'BAL' : bet.sport === 'tennis' ? 'TEN' : bet.sport === 'esports' ? 'ESP' : 'GEN'}
+                                        {bet.market && (
+                                            <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-950/20 px-1.5 py-0.5 rounded border border-emerald-900/30">
+                                                {bet.market === 'CORNERS_CARDS' ? 'CORNERS' : bet.market}
                                             </span>
                                         )}
                                         {isCombined && (
                                             <span className="text-[9px] uppercase font-bold text-rose-400 bg-rose-950/20 px-1.5 py-0.5 rounded border border-rose-900/50 flex items-center gap-1">
-                                                <Link size={8} /> COMBINADA
+                                                <Link size={8} /> PARLAY
                                             </span>
                                         )}
                                         <p className="text-white font-medium text-sm truncate flex-1">{bet.event}</p>
@@ -408,7 +528,7 @@ export const StatsView: React.FC = () => {
                                                 className="ml-auto text-slate-400 hover:text-white flex items-center gap-1 text-[10px] bg-slate-800 px-1.5 py-0.5 rounded"
                                             >
                                                 {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-                                                Ver Selecciones
+                                                Info
                                             </button>
                                         )}
                                     </div>
@@ -462,7 +582,7 @@ export const StatsView: React.FC = () => {
       {/* FAB - Floating Action Button */}
       <button
         onClick={() => setIsBetModalOpen(true)}
-        className="fixed bottom-6 right-6 bg-rose-600 hover:bg-rose-500 text-white p-4 rounded-full shadow-lg shadow-rose-900/40 transition-all hover:scale-110 active:scale-95 z-40 flex items-center justify-center"
+        className="fixed bottom-6 right-6 bg-emerald-600 hover:bg-emerald-500 text-white p-4 rounded-full shadow-lg shadow-emerald-900/40 transition-all hover:scale-110 active:scale-95 z-40 flex items-center justify-center"
       >
         <Plus size={24} />
       </button>
@@ -471,6 +591,7 @@ export const StatsView: React.FC = () => {
         isOpen={isBetModalOpen}
         onClose={() => setIsBetModalOpen(false)}
         onSave={handleSaveBet}
+        currentBankroll={analytics.currentBankroll}
       />
 
       <EditBankrollModal 

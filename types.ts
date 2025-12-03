@@ -48,6 +48,8 @@ export interface BetSelection {
   odds: number;
 }
 
+export type BetMarket = '1X2' | 'GOALS' | 'BTTS' | 'HANDICAP' | 'CORNERS_CARDS' | 'PARLAY' | 'OTHER';
+
 export interface Bet {
   id: string;
   date: number; // Timestamp
@@ -55,6 +57,7 @@ export interface Bet {
   type: 'simple' | 'combined'; // New field
   selections?: BetSelection[]; // New field for combined bets
   sport?: string; 
+  market?: BetMarket; // New field for Football Markets
   stake: number;
   odds: number;
   result: 'pending' | 'won' | 'lost';
