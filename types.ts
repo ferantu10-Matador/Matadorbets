@@ -30,3 +30,24 @@ export interface HistoryItem {
   fullContent: string;
   groundingChunks?: GroundingChunk[];
 }
+
+export interface Match {
+  home: string;
+  away: string;
+  time: string;
+  league: string;
+  fact: string;
+  analysis?: string; // Stores the AI analysis locally
+  groundingChunks?: GroundingChunk[]; // Stores sources
+}
+
+export interface Bet {
+  id: string;
+  date: number; // Timestamp
+  event: string;
+  stake: number;
+  odds: number;
+  result: 'pending' | 'won' | 'lost';
+}
+
+export type ViewType = 'chat' | 'matches' | 'stats';

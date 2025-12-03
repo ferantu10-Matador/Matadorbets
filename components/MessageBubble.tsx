@@ -116,7 +116,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                         const getText = (nodes: React.ReactNode): string => {
                             if (typeof nodes === 'string') return nodes;
                             if (Array.isArray(nodes)) return nodes.map(getText).join('');
-                            if (React.isValidElement(nodes) && nodes.props.children) return getText(nodes.props.children);
+                            if (React.isValidElement(nodes)) {
+                              const element = nodes as React.ReactElement<{ children?: React.ReactNode }>;
+                              if (element.props.children) {
+                                return getText(element.props.children);
+                              }
+                            }
                             return '';
                         };
 

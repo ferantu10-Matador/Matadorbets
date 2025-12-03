@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, ChatState, HistoryItem } from './types';
+import { Message, ChatState, HistoryItem, ViewType } from './types';
 import { sendMessageToGemini } from './services/geminiService';
 import { MessageBubble } from './components/MessageBubble';
 import { InputArea } from './components/InputArea';
-import { HistoryModal } from './components/HistoryModal';
 import { INITIAL_MESSAGE } from './constants';
 import { MatadorLogo } from './components/MatadorLogo';
-import { TrendingUp, AlertTriangle, History, Share2 } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Share2, Menu } from 'lucide-react';
 import { SetupGuide } from './components/SetupGuide';
+import { Sidebar } from './components/Sidebar';
+import { MatchesView } from './components/MatchesView';
+import { StatsView } from './components/StatsView';
 
 const App: React.FC = () => {
+  const [currentView, setCurrentView] = useState<ViewType>('matches'); // Defaulting to matches for new flow
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   const [chatState, setChatState] = useState<ChatState>({
     messages: [
       {
@@ -22,8 +27,6 @@ const App: React.FC = () => {
     isLoading: false,
   });
 
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check for API Key on mount and show guide if missing
@@ -47,62 +50,15 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Load history from local storage on mount
-  useEffect(() => {
-    const savedHistory = localStorage.getItem('tipster_history');
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error("Failed to parse history", e);
-      }
-    }
-  }, []);
-
-  // Save history whenever it changes
-  useEffect(() => {
-    localStorage.setItem('tipster_history', JSON.stringify(history));
-  }, [history]);
-
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (currentView === 'chat') {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [chatState.messages]);
-
-  // Helper to extract useful metadata from the raw text for the history summary
-  const extractMatchDetails = (text: string): { title: string; summary: string } => {
-    // 1. Extract Title: Look for "# 🐂 TeamA vs TeamB"
-    const titleMatch = text.match(/# 🐂\s*(.*?)(\n|$)/i) || 
-                       text.match(/#\s*🐂\s*(.*?)(\n|$)/i);
-    
-    let title = titleMatch ? titleMatch[1].trim() : "Análisis Matador";
-    title = title.replace(/\*\*/g, ''); // Remove bold markdown if present
-
-    // 2. Extract Summary: Try to parse the new Markdown Table for the "Ganador" row
-    // Pattern: | 🏆 Ganador | Prediction | Confidence |
-    const tableWinnerMatch = text.match(/\|\s*🏆\s*Ganador\s*\|\s*(.*?)\s*\|/i);
-    
-    // Fallback: Try to find "La Joya"
-    const joyaMatch = text.match(/### 💎 La Joya.*?\n> \*\*(.*?)\*\*/i) ||
-                      text.match(/### 💎 La Joya.*?\n>\s*(.*?)\n/i);
-
-    let summary = "Ver ficha técnica";
-    
-    if (joyaMatch && joyaMatch[1].trim()) {
-      summary = `💎 ${joyaMatch[1].trim()}`;
-    } else if (tableWinnerMatch && tableWinnerMatch[1].trim()) {
-      summary = `🏆 ${tableWinnerMatch[1].trim()}`;
-    }
-
-    // Clean up summary
-    summary = summary.replace(/\*\*/g, '').replace(/\[|\]/g, '').trim();
-    if (summary.length > 60) summary = summary.substring(0, 57) + "...";
-
-    return { title, summary };
-  };
+  }, [chatState.messages, currentView]);
 
   const handleSendMessage = async (text: string) => {
     const userMessage: Message = {
@@ -135,21 +91,6 @@ const App: React.FC = () => {
         isLoading: false,
       }));
 
-      const { title, summary } = extractMatchDetails(response.text);
-      
-      // Only add to history if we successfully extracted a title (avoids saving error messages or chitchat)
-      if (title !== "Análisis Matador" || summary !== "Ver ficha técnica") {
-        const newHistoryItem: HistoryItem = {
-            id: botMessage.id,
-            timestamp: Date.now(),
-            matchTitle: title,
-            summary: summary,
-            fullContent: response.text,
-            groundingChunks: response.groundingChunks
-        };
-        setHistory((prev) => [newHistoryItem, ...prev]);
-      }
-
     } catch (error: any) {
       console.error(error);
       let errorText = "**Error Crítico:** Lo siento, no he podido conectar con la central de datos.";
@@ -177,12 +118,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleClearHistory = () => {
-    if (window.confirm("¿Borrar todo el historial de apuestas?")) {
-        setHistory([]);
-    }
-  };
-
   const handleShareApp = async () => {
     const shareData = {
       title: 'Matadorbets AI',
@@ -204,26 +139,39 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden relative selection:bg-rose-500 selection:text-white">
+      {/* Sidebar Navigation */}
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        currentView={currentView}
+        onChangeView={setCurrentView}
+      />
+
       {/* Header */}
       <header className="flex-shrink-0 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 py-3 px-4 md:px-6 shadow-lg shadow-black/20 z-20">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="bg-slate-800 p-1.5 rounded-full border border-slate-700 shadow-inner">
-              <MatadorLogo size={32} className="md:w-[36px] md:h-[36px]" />
-            </div>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold tracking-tight text-white font-serif leading-tight">
-                Matador<span className="text-rose-600">bets</span>
-              </h1>
-              <div className="flex items-center gap-2">
-                <span className="flex h-1.5 w-1.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-600"></span>
-                </span>
-                <p className="text-[9px] md:text-[10px] text-slate-400 font-medium tracking-widest uppercase">
-                  AI Analyst
-                </p>
-              </div>
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Hamburger Button */}
+            <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 -ml-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                aria-label="Menu"
+            >
+                <Menu size={24} />
+            </button>
+
+            <div className="flex items-center gap-2 md:gap-3">
+                <div className="hidden md:block bg-slate-800 p-1.5 rounded-full border border-slate-700 shadow-inner">
+                   <MatadorLogo size={32} className="md:w-[36px] md:h-[36px]" />
+                </div>
+                <div>
+                  <h1 className="text-lg md:text-xl font-bold tracking-tight text-white font-serif leading-tight">
+                    Matador<span className="text-rose-600">bets</span>
+                  </h1>
+                  <p className="hidden md:block text-[9px] md:text-[10px] text-slate-400 font-medium tracking-widest uppercase">
+                    AI Analyst
+                  </p>
+                </div>
             </div>
           </div>
           
@@ -246,41 +194,43 @@ const App: React.FC = () => {
             >
               <Share2 size={20} />
             </button>
-
-            <button 
-              onClick={() => setIsHistoryOpen(true)}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 hover:text-rose-400 text-slate-300 px-3 py-2 rounded-lg border border-slate-700 transition-all text-sm font-medium"
-            >
-              <History size={16} />
-              <span className="hidden sm:inline">Historial</span>
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Chat Area */}
-      <main className="flex-grow overflow-y-auto p-4 md:p-6 scroll-smooth bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
-        <div className="max-w-4xl mx-auto flex flex-col min-h-full justify-end">
-          {chatState.messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
-          <div ref={messagesEndRef} />
+      {/* Main Content Area */}
+      <main className="flex-grow overflow-y-auto scroll-smooth bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black relative">
+        <div className="max-w-4xl mx-auto h-full flex flex-col">
+            
+            {/* View: Chat */}
+            <div className={`flex flex-col flex-grow justify-end ${currentView === 'chat' ? 'block' : 'hidden'}`}>
+                <div className="p-4 md:p-6 pb-2">
+                    {chatState.messages.map((msg) => (
+                        <MessageBubble key={msg.id} message={msg} />
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+            </div>
+
+            {/* View: Matches */}
+            {currentView === 'matches' && (
+                <MatchesView />
+            )}
+
+            {/* View: Stats */}
+            {currentView === 'stats' && (
+                <StatsView />
+            )}
         </div>
       </main>
 
-      {/* Input Area */}
-      <InputArea 
-        onSendMessage={handleSendMessage} 
-        isLoading={chatState.isLoading} 
-      />
-
-      {/* History Modal */}
-      <HistoryModal 
-        isOpen={isHistoryOpen} 
-        onClose={() => setIsHistoryOpen(false)} 
-        history={history}
-        onClearHistory={handleClearHistory}
-      />
+      {/* Input Area (Only visible in Chat) */}
+      {currentView === 'chat' && (
+         <InputArea 
+            onSendMessage={handleSendMessage} 
+            isLoading={chatState.isLoading} 
+         />
+      )}
     </div>
   );
 };

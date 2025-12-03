@@ -1,5 +1,6 @@
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
+import { Match } from "../types";
 
 let chatSession: Chat | null = null;
 
@@ -76,3 +77,66 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
     throw error;
   }
 };
+
+export const fetchTopMatches = async (): Promise<Match[]> => {
+    try {
+        const ai = getAiClient();
+        const now = new Date();
+        const dateString = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        // Robust prompt asking for JSON specifically
+        // Note: We cannot use responseMimeType: 'application/json' when using googleSearch tool as they are incompatible in this model version.
+        const prompt = `Fecha actual: ${dateString}.
+        Busca en Google "Partidos de fútbol hoy destacados Europa Latam".
+        Identifica los 6-10 partidos más importantes que se juegan HOY.
+        
+        Responde ÚNICAMENTE con un array JSON válido. 
+        NO añadas bloques markdown (\`\`\`json), NI texto introductorio. Solo el array crudo.
+        
+        Formato requerido:
+        [
+          {
+            "home": "Equipo Local",
+            "away": "Equipo Visitante",
+            "time": "HH:MM",
+            "league": "Competición",
+            "fact": "Dato breve (ej: 'El local lleva 5 victorias seguidas')"
+          }
+        ]`;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                // responseMimeType: "application/json", // REMOVED: Conflict with googleSearch
+                tools: [{ googleSearch: {} }],
+                // CRITICAL: Disable safety settings here too
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' }
+                ]
+            }
+        });
+
+        let text = response.text;
+        if (!text) return [];
+
+        // Defensive cleaning: remove markdown code blocks if the model ignores the instruction
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        // Find the start and end of the JSON array to avoid parsing errors if there is extra text
+        const firstBracket = text.indexOf('[');
+        const lastBracket = text.lastIndexOf(']');
+        
+        if (firstBracket !== -1 && lastBracket !== -1) {
+            text = text.substring(firstBracket, lastBracket + 1);
+        }
+
+        return JSON.parse(text) as Match[];
+    } catch (error) {
+        console.error("Error fetching matches:", error);
+        return [];
+    }
+}
