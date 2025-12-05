@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Trophy, Clock, Calendar } from 'lucide-react';
 import { Match } from '../types';
 import { MessageBubble } from './MessageBubble';
+import { TwitterShareButton } from './TwitterShareButton';
 
 interface MatchDetailModalProps {
   isOpen: boolean;
@@ -27,16 +28,25 @@ export const MatchDetailModal: React.FC<MatchDetailModalProps> = ({ isOpen, onCl
                     <Clock size={12} /> {match.time}
                 </span>
              </div>
-             <h2 className="text-xl md:text-2xl font-bold text-white leading-tight">
+             <h2 className="text-xl md:text-2xl font-bold text-white leading-tight pr-4">
                 {match.home} <span className="text-slate-500 text-lg">vs</span> {match.away}
              </h2>
           </div>
-          <button 
-            onClick={onClose} 
-            className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-          >
-            <X size={20} />
-          </button>
+          
+          <div className="flex items-center gap-2">
+            <TwitterShareButton 
+                matchTitle={`${match.home} vs ${match.away}`} 
+                analysisText={match.analysis} 
+            />
+            
+            <button 
+                onClick={onClose} 
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                aria-label="Cerrar"
+            >
+                <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Content - Reusing MessageBubble for Markdown rendering */}
