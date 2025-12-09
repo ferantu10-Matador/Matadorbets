@@ -136,9 +136,9 @@ export const MatchesView: React.FC<MatchesViewProps> = () => {
           setSelectedMatch(updatedMatches[index]);
           setIsModalOpen(true);
 
-      } catch (err) {
+      } catch (err: any) {
           console.error("Error analyzing match:", err);
-          alert("Error conectando con el Matador. Inténtalo de nuevo.");
+          alert(`Error del Matador: ${err.message || "Error desconocido. Intenta generar una clave nueva de Gemini."}`);
       } finally {
           setAnalyzingIndex(null);
       }
