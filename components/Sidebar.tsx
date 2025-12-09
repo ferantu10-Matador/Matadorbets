@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { MessageSquare, CalendarDays, BarChart2, X, ChevronRight, Settings, TrendingUp, GraduationCap } from 'lucide-react';
 import { ViewType, Bet } from '../types';
 import { MatadorLogo } from './MatadorLogo';
@@ -32,8 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentView, 
   });
   const [isMounted, setIsMounted] = useState(false);
 
-  // Calculate Rank Logic on Mount/Open
-  useEffect(() => {
+  // Calculate Rank Logic on Mount/Open - Using LayoutEffect to prevent visual flash
+  useLayoutEffect(() => {
     setIsMounted(true);
     
     // Safety check for localStorage
