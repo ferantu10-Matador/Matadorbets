@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Message } from '../types';
 import { User, Globe, ExternalLink, Copy, Check } from 'lucide-react';
 import { MatadorLogo } from './MatadorLogo';
@@ -9,7 +9,7 @@ interface MessageBubbleProps {
   message: Message;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+export const MessageBubble = memo(({ message }: MessageBubbleProps) => {
   const isUser = message.role === 'user';
   const [isCopied, setIsCopied] = useState(false);
 
@@ -96,9 +96,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                   <ReactMarkdown 
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      // Table Styles
+                      // Table Styles - Optimized with translate-z-0 for mobile performance
                       table: ({node, ...props}) => (
-                        <div className="overflow-x-auto my-5 rounded-xl border border-slate-800 bg-slate-900/20 shadow-lg">
+                        <div className="overflow-x-auto my-5 rounded-xl border border-slate-800 bg-slate-900/20 shadow-lg translate-z-0">
                           <table className="w-full text-sm text-left text-slate-300 border-collapse" {...props} />
                         </div>
                       ),
@@ -223,4 +223,4 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       </div>
     </div>
   );
-};
+});

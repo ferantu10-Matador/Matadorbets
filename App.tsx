@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Message, ChatState, HistoryItem, ViewType } from './types';
 import { sendMessageToGemini } from './services/geminiService';
 import { MessageBubble } from './components/MessageBubble';
@@ -12,6 +12,12 @@ import { MatchesView } from './components/MatchesView';
 import { StatsView } from './components/StatsView';
 import { SettingsView } from './components/SettingsView';
 import { AcademyView } from './components/AcademyView';
+
+// Optimization: Memoize views to prevent re-renders when chat state updates
+const MemoMatchesView = memo(MatchesView);
+const MemoStatsView = memo(StatsView);
+const MemoSettingsView = memo(SettingsView);
+const MemoAcademyView = memo(AcademyView);
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('matches'); // Defaulting to matches for new flow
@@ -216,22 +222,22 @@ const App: React.FC = () => {
 
             {/* View: Matches */}
             {currentView === 'matches' && (
-                <MatchesView />
+                <MemoMatchesView />
             )}
 
             {/* View: Stats */}
             {currentView === 'stats' && (
-                <StatsView />
+                <MemoStatsView />
             )}
 
             {/* View: Academy */}
             {currentView === 'academy' && (
-                <AcademyView />
+                <MemoAcademyView />
             )}
 
             {/* View: Settings */}
             {currentView === 'settings' && (
-                <SettingsView />
+                <MemoSettingsView />
             )}
         </div>
       </main>
